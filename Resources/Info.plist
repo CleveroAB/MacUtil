@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>MacUtil</string>
+	<key>CFBundleDisplayName</key>
+	<string>MacUtil</string>
+	<key>CFBundleExecutable</key>
+	<string>MacUtil</string>
+	<key>CFBundleIdentifier</key>
+	<string>se.clevero.macutil</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<!-- Menu-bar agent: no Dock icon, no main window. -->
+	<key>LSUIElement</key>
+	<true/>
+	<!-- Shown in the Screen Recording permission prompt. -->
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>MacUtil captures small thumbnails of your open windows so the window switcher can preview them. Capture happens only while the switcher is on screen.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>MacUtil records your voice only while voice-to-text is active so it can transcribe speech into the selected text field.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>MacUtil uses speech recognition to turn your recorded voice into text for the active input field.</string>
+</dict>
+</plist>

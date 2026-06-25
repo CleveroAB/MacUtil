@@ -1,0 +1,70 @@
+# Agent Guide
+
+This file gives AI coding agents the project context needed to work quickly and safely.
+
+## Project Snapshot
+
+- `MacUtil` is a small macOS menu-bar utility built with Swift Package Manager.
+- Runtime stack: Swift + AppKit, Carbon hotkeys/event taps, Accessibility APIs, and ScreenCaptureKit.
+- Package target: `Sources/MacUtil`.
+- App bundle output: `build/MacUtil.app`.
+- The package intentionally has no third-party dependencies.
+- `Package.swift` uses Swift tools 6.0 but Swift 5 language mode because the app depends heavily on callback-oriented AppKit, Carbon, and AX APIs.
+
+## Required Workflow
+
+After every change or edit in this repo, rebuild and relaunch the app so the user can test it:
+
+```bash
+Scripts/run.sh
+```
+
+This builds the release app bundle, signs it, kills any running `MacUtil`, and opens `build/MacUtil.app`.
+
+Use these alternatives only when they are specifically useful:
+
+```bash
+Scripts/run.sh debug       # debug build, then relaunch
+Scripts/build-app.sh       # build the app bundle without launching
+swift build                # plain SPM build without app bundle/signing
+```
+
+If `Scripts/run.sh` fails, report the failure clearly and do not claim the app was relaunched.
+
+## Repo Layout
+
+```text
+Sources/MacUtil/
+  main.swift / AppDelegate.swift     app bootstrap and menu-bar agent lifecycle
+  AppCleanup/                        optional cleanup of windowless apps
+  Logitech/                          Logitech HID/device UI support
+  Permissions/                       Accessibility and Screen Recording checks/prompts
+  Settings/                          UserDefaults-backed settings
+  Snapping/                          hotkeys, drag snapping, AX window movement
+  StatusBar/                         NSStatusItem menu and guide windows
+  Support/                           shared logging, geometry, login item helpers
+  Switcher/                          Cmd-Tab switcher, window enumeration, thumbnails, overlay UI
+Resources/
+  Info.plist
+  AppIcon.icns
+Scripts/
+  build-app.sh
+  run.sh
+```
+
+## Engineering Notes
+
+- Prefer existing AppKit-style patterns over adding new abstractions.
+- Keep the app idle-cost low: avoid timers, polling, and background work unless the feature truly requires it.
+- Keep changes scoped. This is a compact utility, so small direct implementations are usually better than broad refactors.
+- UI code should remain dense, functional, and native-feeling. Avoid marketing-style layouts or decorative UI.
+- Preserve the stable signing flow in `Scripts/build-app.sh`; macOS TCC permissions depend on the code signature.
+- Accessibility permission is required for moving/focusing windows. Screen Recording permission is required for live thumbnails.
+- If permissions affect verification, mention exactly what permission may need to be granted or refreshed.
+
+## Verification Checklist
+
+1. Run `Scripts/run.sh` after the edit.
+2. Confirm the command exits successfully.
+3. Tell the user the app was rebuilt and relaunched.
+4. If the change affects permissions, shortcuts, snapping, the switcher, login item behavior, or status-bar UI, describe the specific manual behavior the user should test.
