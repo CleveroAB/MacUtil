@@ -28,12 +28,15 @@ package dependencies.
 ## Requirements
 
 - macOS 14 or newer.
-- Xcode / Swift toolchain with Swift tools 6.0 support.
+- Xcode 26 or newer to build. The app references macOS 26 SpeechAnalyzer APIs
+  behind availability checks, so older SDKs do not contain all required symbols.
 - A code-signing identity is recommended so macOS privacy permissions survive
   rebuilds.
 
-The app has been developed on Apple Silicon. The package is intentionally kept
-simple enough to open directly in Xcode via `Package.swift`.
+The app has been developed on Apple Silicon. It keeps macOS 14 as the runtime
+minimum and falls back to older Speech APIs below macOS 26 where needed. The
+package is intentionally simple enough to open directly in Xcode via
+`Package.swift`.
 
 ## Build And Run
 

@@ -26,6 +26,8 @@ binary releases.
 - `Package.swift` declares no third-party dependencies.
 - Swift tools version is 6.0 with Swift 5 language mode.
 - Minimum platform is macOS 14.
+- Building currently requires an Xcode 26 SDK because the source references
+  macOS 26 SpeechAnalyzer symbols behind availability checks.
 - The release app bundle is produced by `Scripts/build-app.sh` and relaunched by
   `Scripts/run.sh`.
 - Build signing prefers Developer ID Application, then Apple Development, then

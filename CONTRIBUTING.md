@@ -7,7 +7,8 @@ Thanks for helping improve MacUtil.
 Requirements:
 
 - macOS 14 or newer.
-- Xcode / Swift toolchain with Swift tools 6.0 support.
+- Xcode 26 or newer. The source references macOS 26 SpeechAnalyzer APIs behind
+  availability checks, so older SDKs cannot compile those symbols.
 - Accessibility, Screen Recording, Microphone, Speech Recognition, and possibly
   Input Monitoring permissions for full manual testing.
 
