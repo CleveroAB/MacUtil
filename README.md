@@ -53,8 +53,8 @@ package is intentionally simple enough to open directly in Xcode via
 Most users do not need Xcode or Swift. Download the pre-built app from
 [GitHub Releases](https://github.com/CleveroAB/MacUtil/releases/latest):
 
-- [Download MacUtil 0.1.1 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.1/MacUtil-0.1.1.dmg)
-- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.1/MacUtil-0.1.1.dmg.sha256)
+- [Download MacUtil 0.1.2 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.2/MacUtil-0.1.2.dmg)
+- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.2/MacUtil-0.1.2.dmg.sha256)
 
 Open the DMG and drag `MacUtil.app` to Applications. The release DMG is
 Developer ID signed, notarized, and stapled by Apple.
@@ -148,9 +148,9 @@ flows that are not started from the standard keyboard shortcuts.
 
 ### Updates
 
-Use "Check for Updates..." in the menu to compare the installed app with the
-latest GitHub Release. Automatic update checks are opt-in and run at most once a
-day when enabled.
+Use Check for Updates > Check Now in the menu to compare the installed app with
+the latest GitHub Release. Automatic update checks are opt-in from the same
+submenu and run at most once a day when enabled.
 
 ## Code Signing And Stable Permissions
 

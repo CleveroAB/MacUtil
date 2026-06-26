@@ -119,8 +119,8 @@ final class UserGuideWindowController: NSWindowController {
         ]))
 
         stack.addArrangedSubview(section("Updates", rows: [
-            GuideRow("Check now", .note("Use Check for Updates in the menu")),
-            GuideRow("Automatic checks", .note("Opt in from the menu; checks run at most once a day")),
+            GuideRow("Check now", .note("Check for Updates > Check Now")),
+            GuideRow("Automatic checks", .note("Opt in from Check for Updates; checks run at most once a day")),
         ]))
 
         return root

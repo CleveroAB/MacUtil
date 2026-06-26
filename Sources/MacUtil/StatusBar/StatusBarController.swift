@@ -109,18 +109,6 @@ final class StatusBarController: NSObject {
         guide.target = self
         menu.addItem(guide)
 
-        let checkForUpdates = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates), keyEquivalent: "")
-        checkForUpdates.target = self
-        menu.addItem(checkForUpdates)
-
-        let automaticUpdates = toggle(
-            "Automatically Check for Updates",
-            #selector(toggleAutomaticUpdates),
-            settings.automaticUpdateChecksEnabled
-        )
-        menu.addItem(automaticUpdates)
-        automaticUpdatesItem = automaticUpdates
-
         let permissions = NSMenuItem(title: "Permissions", action: nil, keyEquivalent: "")
         let permissionsMenu = NSMenu()
 
@@ -154,6 +142,10 @@ final class StatusBarController: NSObject {
         menu.addItem(permissions)
 
         menu.addItem(.separator())
+
+        let updates = NSMenuItem(title: "Check for Updates", action: nil, keyEquivalent: "")
+        updates.submenu = updatesMenu()
+        menu.addItem(updates)
 
         let quit = NSMenuItem(title: "Quit MacUtil", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
@@ -328,6 +320,25 @@ final class StatusBarController: NSObject {
         clipboardContext.state = settings.voiceAIUseClipboardContext ? .on : .off
         submenu.addItem(clipboardContext)
         voiceAIUseClipboardContextItem = clipboardContext
+
+        return submenu
+    }
+
+    private func updatesMenu() -> NSMenu {
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+
+        let checkNow = NSMenuItem(title: "Check Now...", action: #selector(checkForUpdates), keyEquivalent: "")
+        checkNow.target = self
+        submenu.addItem(checkNow)
+
+        let automaticUpdates = toggle(
+            "Check for Updates Automatically",
+            #selector(toggleAutomaticUpdates),
+            settings.automaticUpdateChecksEnabled
+        )
+        submenu.addItem(automaticUpdates)
+        automaticUpdatesItem = automaticUpdates
 
         return submenu
     }
