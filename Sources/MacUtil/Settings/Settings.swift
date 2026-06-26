@@ -13,6 +13,7 @@ final class Settings {
         static let dragSnap = "dragSnapEnabled"
         static let windowlessQuitter = "windowlessQuitterEnabled"
         static let switcher = "switcherEnabled"
+        static let screenshotClipboard = "screenshotClipboardEnabled"
         static let voiceInput = "voiceInputEnabled"
         static let voiceInputOnDeviceOnly = "voiceInputOnDeviceOnly"
         static let voiceAIReply = "voiceAIReplyEnabled"
@@ -29,6 +30,7 @@ final class Settings {
             Key.dragSnap: true,
             Key.windowlessQuitter: true,
             Key.switcher: true,
+            Key.screenshotClipboard: true,
             Key.voiceInput: true,
             Key.voiceInputOnDeviceOnly: true,
             Key.voiceAIReply: true,
@@ -58,6 +60,11 @@ final class Settings {
     var switcherEnabled: Bool {
         get { defaults.bool(forKey: Key.switcher) }
         set { defaults.set(newValue, forKey: Key.switcher) }
+    }
+
+    var screenshotClipboardEnabled: Bool {
+        get { defaults.bool(forKey: Key.screenshotClipboard) }
+        set { defaults.set(newValue, forKey: Key.screenshotClipboard) }
     }
 
     var voiceInputEnabled: Bool {

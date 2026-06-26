@@ -40,6 +40,7 @@ Sources/MacUtil/
   Logitech/                          Logitech HID/device UI support
   Permissions/                       Accessibility and Screen Recording checks/prompts
   Settings/                          UserDefaults-backed settings
+  Screenshots/                       native screenshot clipboard mirroring
   Snapping/                          hotkeys, drag snapping, AX window movement
   StatusBar/                         NSStatusItem menu and guide windows
   Support/                           shared logging, geometry, login item helpers
@@ -62,9 +63,17 @@ Scripts/
 - Accessibility permission is required for moving/focusing windows. Screen Recording permission is required for live thumbnails.
 - If permissions affect verification, mention exactly what permission may need to be granted or refreshed.
 
+## Documentation Upkeep
+
+- Keep the GitHub-facing `README.md` and relevant docs in sync with behavior, permissions, shortcuts, status-bar UI, and user-visible feature changes.
+- When adding or changing user-facing UI, update the in-app User Guide if the workflow or discoverability changes.
+- Store README screenshots and other durable documentation images under `docs/images/` and reference them with relative paths so they render on GitHub.
+- If a change introduces a new source folder, permission, setting, shortcut, or manual test path, update the repo layout and verification notes where relevant.
+
 ## Verification Checklist
 
 1. Run `Scripts/run.sh` after the edit.
 2. Confirm the command exits successfully.
 3. Tell the user the app was rebuilt and relaunched.
-4. If the change affects permissions, shortcuts, snapping, the switcher, login item behavior, or status-bar UI, describe the specific manual behavior the user should test.
+4. Confirm GitHub-facing docs are current for the change, especially `README.md`.
+5. If the change affects permissions, shortcuts, snapping, screenshots, the switcher, login item behavior, or status-bar UI, describe the specific manual behavior the user should test.

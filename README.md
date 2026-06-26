@@ -12,6 +12,12 @@ package dependencies.
 > amount of undocumented macOS behavior. It is not positioned as an App Store
 > build.
 
+## Preview
+
+| Menu Bar | User Guide |
+| --- | --- |
+| <img src="docs/images/macutil-menu.png" alt="MacUtil menu bar menu showing enabled feature toggles" width="320"> | <img src="docs/images/macutil-user-guide.png" alt="MacUtil user guide window showing shortcuts and screenshot behavior" width="420"> |
+
 ## Features
 
 - Rectangle-style window snapping with keyboard shortcuts and drag-to-edge
@@ -23,6 +29,8 @@ package dependencies.
 - Logitech HID++ helper UI for supported devices, including DPI controls,
   gesture-button Mission Control, and side-button actions.
 - Command-Shift-Q helper that quits regular apps without visible windows.
+- Copies native macOS screenshots to the clipboard immediately while keeping the
+  normal floating thumbnail and Desktop/configured-folder save behavior.
 - Launch-at-login toggle and live permission status in the menu-bar app.
 
 ## Requirements
@@ -58,10 +66,11 @@ Permissions submenu that opens the relevant panes and shows current status.
 | Permission | Used For |
 | --- | --- |
 | Accessibility | Moving/resizing windows, focusing switcher selections, global event taps, paste injection. |
-| Screen Recording | Live switcher thumbnails. Without it, the switcher can still show app icons and titles. |
+| Screen Recording | Live switcher thumbnails and immediate screenshot clipboard mirroring. Without it, the switcher can still show app icons and titles. |
 | Microphone | Voice-to-text recording. |
 | Speech Recognition | Apple speech transcription / SpeechAnalyzer. |
 | Input Monitoring | May be required by macOS for some event-tap or Logitech side-button behavior. |
+| Desktop / configured screenshot folder access | Reading newly saved screenshot files so they can be copied to the clipboard. |
 
 After granting Screen Recording, relaunch MacUtil with `Scripts/run.sh` so the
 permission is picked up by ScreenCaptureKit.
@@ -114,6 +123,15 @@ intent, the selected OpenRouter model, and optionally clipboard context to
 OpenRouter. The OpenRouter API key is stored in Keychain. See
 [docs/PRIVACY.md](docs/PRIVACY.md) for details.
 
+### Screenshots
+
+When "Copy Screenshots to Clipboard" is enabled, MacUtil mirrors the native
+macOS screenshot shortcuts to the clipboard while leaving the normal floating
+thumbnail behavior untouched. If the mirrored screenshot is pasted before the
+native floating thumbnail saves to disk, MacUtil deletes the matching saved file
+as soon as it appears. The file watcher remains as a fallback for screenshot
+flows that are not started from the standard keyboard shortcuts.
+
 ## Code Signing And Stable Permissions
 
 macOS ties Accessibility, Screen Recording, Microphone, Speech Recognition, and
@@ -163,6 +181,7 @@ Sources/MacUtil/
   Permissions/                       Accessibility and privacy permissions
   Settings/                          UserDefaults-backed settings
   Snapping/                          hotkeys, drag snapping, AX movement
+  Screenshots/                       native screenshot clipboard mirroring
   StatusBar/                         menu-bar UI and guide window
   Support/                           logging, geometry, login item helpers
   Switcher/                          Cmd-Tab switcher and thumbnails

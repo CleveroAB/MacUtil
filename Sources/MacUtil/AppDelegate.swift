@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let dragMonitor = DragSnapMonitor()
     private let windowlessAppQuitter = WindowlessAppQuitter()
     private let switcher = SwitcherController()
+    private let screenshotClipboard = ScreenshotClipboardController()
     private let logitechManager = LogitechManager()
     private let voiceInput = VoiceInputController()
     private var statusBar: StatusBarController!
@@ -26,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settings.dragSnapEnabled { dragMonitor.start() }
         if settings.windowlessQuitterEnabled { windowlessAppQuitter.start() }
         if settings.switcherEnabled { switcher.start() }
+        if settings.screenshotClipboardEnabled { screenshotClipboard.start() }
         if settings.voiceInputEnabled { voiceInput.start() }
 
         statusBar = StatusBarController(
@@ -33,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dragMonitor: dragMonitor,
             windowlessAppQuitter: windowlessAppQuitter,
             switcher: switcher,
+            screenshotClipboard: screenshotClipboard,
             logitechManager: logitechManager,
             voiceInput: voiceInput
         )
@@ -40,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        screenshotClipboard.stop()
         voiceInput.stop()
         logitechManager.stop()
     }

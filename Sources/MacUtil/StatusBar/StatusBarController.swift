@@ -8,6 +8,7 @@ final class StatusBarController: NSObject {
     private let dragMonitor: DragSnapMonitor
     private let windowlessAppQuitter: WindowlessAppQuitter
     private let switcher: SwitcherController
+    private let screenshotClipboard: ScreenshotClipboardController
     private let logitechManager: LogitechManager
     private let voiceInput: VoiceInputController
     private let userGuide = UserGuideWindowController()
@@ -41,6 +42,7 @@ final class StatusBarController: NSObject {
         dragMonitor: DragSnapMonitor,
         windowlessAppQuitter: WindowlessAppQuitter,
         switcher: SwitcherController,
+        screenshotClipboard: ScreenshotClipboardController,
         logitechManager: LogitechManager,
         voiceInput: VoiceInputController
     ) {
@@ -48,6 +50,7 @@ final class StatusBarController: NSObject {
         self.dragMonitor = dragMonitor
         self.windowlessAppQuitter = windowlessAppQuitter
         self.switcher = switcher
+        self.screenshotClipboard = screenshotClipboard
         self.logitechManager = logitechManager
         self.voiceInput = voiceInput
         super.init()
@@ -87,6 +90,7 @@ final class StatusBarController: NSObject {
         menu.addItem(toggle("Drag-to-Edge Snapping", #selector(toggleDragSnap), settings.dragSnapEnabled))
         menu.addItem(toggle("Window Switcher", #selector(toggleSwitcher), settings.switcherEnabled, keyEquivalent: "\t", modifiers: [.command]))
         menu.addItem(toggle("Quit Apps Without Windows", #selector(toggleWindowlessQuitter), settings.windowlessQuitterEnabled, keyEquivalent: "q", modifiers: [.command, .shift]))
+        menu.addItem(toggle("Copy Screenshots to Clipboard", #selector(toggleScreenshotClipboard), settings.screenshotClipboardEnabled))
 
         let voice = toggle("Voice-to-Text", #selector(toggleVoiceInput), settings.voiceInputEnabled)
         voice.submenu = voiceInputMenu()
@@ -408,6 +412,12 @@ final class StatusBarController: NSObject {
         settings.switcherEnabled.toggle()
         settings.switcherEnabled ? switcher.start() : switcher.stop()
         sender.state = settings.switcherEnabled ? .on : .off
+    }
+
+    @objc private func toggleScreenshotClipboard(_ sender: NSMenuItem) {
+        settings.screenshotClipboardEnabled.toggle()
+        settings.screenshotClipboardEnabled ? screenshotClipboard.start() : screenshotClipboard.stop()
+        sender.state = settings.screenshotClipboardEnabled ? .on : .off
     }
 
     @objc private func toggleVoiceInput(_ sender: NSMenuItem) {

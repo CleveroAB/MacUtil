@@ -114,6 +114,10 @@ final class UserGuideWindowController: NSWindowController {
             GuideRow("Quits unused apps", .keys([["⌘", "⇧", "Q"]])),
         ]))
 
+        stack.addArrangedSubview(section("Screenshots", rows: [
+            GuideRow("Native macOS screenshots", .note("Saved normally and copied to clipboard")),
+        ]))
+
         return root
     }
 
