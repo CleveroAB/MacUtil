@@ -33,9 +33,10 @@ fi
 
 if [ "$SIGN_ID" = "-" ]; then
     echo "▶ Code-signing (ad-hoc — TCC grants may reset on rebuild)…"
+    codesign --force --sign "$SIGN_ID" "$APP"
 else
-    echo "▶ Code-signing with stable identity ($SIGN_ID)…"
+    echo "▶ Code-signing with stable hardened-runtime identity ($SIGN_ID)…"
+    codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP"
 fi
-codesign --force --sign "$SIGN_ID" "$APP"
 
 echo "✓ Built $APP"

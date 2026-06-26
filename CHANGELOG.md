@@ -5,7 +5,7 @@ All notable changes to MacUtil will be documented in this file.
 The format follows the spirit of Keep a Changelog, and this project uses
 semantic versioning once public releases begin.
 
-## [0.1.0] - 2026-06-25
+## [0.1.0] - 2026-06-26
 
 ### Added
 
@@ -16,7 +16,8 @@ semantic versioning once public releases begin.
 - Optional OpenRouter-powered AI email replies.
 - Logitech HID++ device helper UI and side-button behavior.
 - Command-Shift-Q cleanup for apps without visible windows.
-- Build scripts for signed local app bundles.
+- Screenshot clipboard mirroring for native macOS screenshot shortcuts.
+- Build scripts for signed local app bundles and release DMG packaging.
 
 ### Changed
 

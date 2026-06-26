@@ -46,12 +46,23 @@ minimum and falls back to older Speech APIs below macOS 26 where needed. The
 package is intentionally simple enough to open directly in Xcode via
 `Package.swift`.
 
+## Download
+
+For normal use, download the latest `MacUtil-<version>.dmg` from
+[GitHub Releases](https://github.com/CleveroAB/MacUtil/releases), open it, and
+drag `MacUtil.app` to Applications.
+
+The release app is Developer ID signed. If a release is marked as not notarized,
+macOS Gatekeeper may require opening it with Control-click -> Open the first
+time.
+
 ## Build And Run
 
 ```bash
 Scripts/run.sh           # build release app bundle, sign, relaunch
 Scripts/run.sh debug     # debug build, sign, relaunch
 Scripts/build-app.sh     # build build/MacUtil.app without launching
+Scripts/package-dmg.sh   # build a release DMG in dist/
 swift build              # plain SPM build without .app bundle/signing
 ```
 
@@ -191,6 +202,7 @@ Resources/
   AppIcon.icns
 Scripts/
   build-app.sh
+  package-dmg.sh
   run.sh
 ```
 

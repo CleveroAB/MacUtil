@@ -80,5 +80,29 @@ git push origin v0.1.0
 ```
 
 For binary releases, prefer a Developer ID signed and notarized archive. The
-current build script signs the app but does not notarize or package a release
-archive.
+release packaging script builds a signed DMG under `dist/`:
+
+```bash
+Scripts/package-dmg.sh
+```
+
+To notarize and staple the DMG, first store Apple notary credentials in the
+Keychain with `xcrun notarytool store-credentials`, then pass the keychain
+profile name:
+
+```bash
+MACUTIL_NOTARY_PROFILE="<profile>" Scripts/package-dmg.sh
+```
+
+Create or update the GitHub release with the DMG and checksum:
+
+```bash
+VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+git tag "v$VERSION"
+git push origin "v$VERSION"
+gh release create "v$VERSION" \
+  "dist/MacUtil-$VERSION.dmg" \
+  "dist/MacUtil-$VERSION.dmg.sha256" \
+  --title "MacUtil $VERSION" \
+  --notes "Developer ID signed DMG. See README for permissions and first-run notes."
+```

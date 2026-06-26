@@ -28,10 +28,10 @@ binary releases.
 - Minimum platform is macOS 14.
 - Building currently requires an Xcode 26 SDK because the source references
   macOS 26 SpeechAnalyzer symbols behind availability checks.
-- The release app bundle is produced by `Scripts/build-app.sh` and relaunched by
-  `Scripts/run.sh`.
+- The release app bundle is produced by `Scripts/build-app.sh`, packaged as a
+  DMG by `Scripts/package-dmg.sh`, and relaunched locally by `Scripts/run.sh`.
 - Build signing prefers Developer ID Application, then Apple Development, then
-  ad-hoc signing.
+  ad-hoc signing. Developer ID builds use hardened runtime.
 
 ## Secret And Private Data Scan
 
@@ -92,6 +92,7 @@ Completed in this pass:
 - Added `docs/PUBLISHING.md`.
 - Added a GitHub Actions build workflow.
 - Made debug logging opt-in.
+- Added repeatable signed DMG packaging for GitHub Releases.
 
 Still recommended before public launch:
 
@@ -100,5 +101,5 @@ Still recommended before public launch:
 - Choose the public GitHub repository owner/name.
 - Enable GitHub private vulnerability reporting.
 - Add screenshots or a short demo GIF if desired.
-- Decide whether to ship only source or also signed/notarized release artifacts.
+- Add Apple notarization credentials for fully notarized release artifacts.
 - Consider adding automated tests around pure logic if the project grows.

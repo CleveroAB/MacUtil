@@ -5,6 +5,7 @@
 # Swift Package Manager / build output
 .build/
 build/
+dist/
 DerivedData/
 
 # Xcode and local editor state
