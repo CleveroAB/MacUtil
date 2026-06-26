@@ -46,6 +46,7 @@ Sources/MacUtil/
   StatusBar/                         NSStatusItem menu and guide windows
   Support/                           shared logging, geometry, login item helpers
   Switcher/                          Cmd-Tab switcher, window enumeration, thumbnails, overlay UI
+  Updates/                           GitHub Releases update checks
 Resources/
   Info.plist
   AppIcon.icns

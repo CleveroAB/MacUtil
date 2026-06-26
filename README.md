@@ -31,6 +31,7 @@ package dependencies.
 - Command-Shift-Q helper that quits regular apps without visible windows.
 - Copies native macOS screenshots to the clipboard immediately while keeping the
   normal floating thumbnail and Desktop/configured-folder save behavior.
+- Manual update checks plus opt-in automatic daily checks via GitHub Releases.
 - Launch-at-login toggle and live permission status in the menu-bar app.
 
 ## Requirements
@@ -52,8 +53,8 @@ package is intentionally simple enough to open directly in Xcode via
 Most users do not need Xcode or Swift. Download the pre-built app from
 [GitHub Releases](https://github.com/CleveroAB/MacUtil/releases/latest):
 
-- [Download MacUtil 0.1.0 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.0/MacUtil-0.1.0.dmg)
-- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.0/MacUtil-0.1.0.dmg.sha256)
+- [Download MacUtil 0.1.1 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.1/MacUtil-0.1.1.dmg)
+- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.1/MacUtil-0.1.1.dmg.sha256)
 
 Open the DMG and drag `MacUtil.app` to Applications. The release DMG is
 Developer ID signed, notarized, and stapled by Apple.
@@ -144,6 +145,12 @@ thumbnail behavior untouched. If the mirrored screenshot is pasted before the
 native floating thumbnail saves to disk, MacUtil deletes the matching saved file
 as soon as it appears. The file watcher remains as a fallback for screenshot
 flows that are not started from the standard keyboard shortcuts.
+
+### Updates
+
+Use "Check for Updates..." in the menu to compare the installed app with the
+latest GitHub Release. Automatic update checks are opt-in and run at most once a
+day when enabled.
 
 ## Code Signing And Stable Permissions
 

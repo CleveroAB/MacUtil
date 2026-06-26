@@ -50,6 +50,15 @@ Clipboard context is trimmed and capped before sending. Disable "AI Email Reply"
 or "Use Clipboard Context" in the Voice-to-Text menu if you do not want this
 behavior.
 
+## Update Checks
+
+Manual update checks and opt-in automatic update checks contact the GitHub
+Releases API for `CleveroAB/MacUtil`. Automatic checks are disabled by default
+and run at most once a day when enabled.
+
+MacUtil sends the current app version in the HTTP `User-Agent` header. GitHub
+receives the normal network metadata for the request, such as IP address.
+
 ## Logitech Features
 
 MacUtil enumerates connected Logitech HID devices and can store per-device

@@ -118,6 +118,11 @@ final class UserGuideWindowController: NSWindowController {
             GuideRow("Native macOS screenshots", .note("Saved normally and copied to clipboard")),
         ]))
 
+        stack.addArrangedSubview(section("Updates", rows: [
+            GuideRow("Check now", .note("Use Check for Updates in the menu")),
+            GuideRow("Automatic checks", .note("Opt in from the menu; checks run at most once a day")),
+        ]))
+
         return root
     }
 

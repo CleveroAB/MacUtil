@@ -5,6 +5,13 @@ All notable changes to MacUtil will be documented in this file.
 The format follows the spirit of Keep a Changelog, and this project uses
 semantic versioning once public releases begin.
 
+## [0.1.1] - 2026-06-26
+
+### Added
+
+- Manual "Check for Updates..." menu item backed by GitHub Releases.
+- Opt-in automatic update checks that run at most once a day.
+
 ## [0.1.0] - 2026-06-26
 
 ### Added

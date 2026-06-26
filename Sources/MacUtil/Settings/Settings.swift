@@ -14,6 +14,8 @@ final class Settings {
         static let windowlessQuitter = "windowlessQuitterEnabled"
         static let switcher = "switcherEnabled"
         static let screenshotClipboard = "screenshotClipboardEnabled"
+        static let automaticUpdateChecks = "automaticUpdateChecksEnabled"
+        static let lastUpdateCheckDate = "lastUpdateCheckDate"
         static let voiceInput = "voiceInputEnabled"
         static let voiceInputOnDeviceOnly = "voiceInputOnDeviceOnly"
         static let voiceAIReply = "voiceAIReplyEnabled"
@@ -31,6 +33,7 @@ final class Settings {
             Key.windowlessQuitter: true,
             Key.switcher: true,
             Key.screenshotClipboard: true,
+            Key.automaticUpdateChecks: false,
             Key.voiceInput: true,
             Key.voiceInputOnDeviceOnly: true,
             Key.voiceAIReply: true,
@@ -65,6 +68,22 @@ final class Settings {
     var screenshotClipboardEnabled: Bool {
         get { defaults.bool(forKey: Key.screenshotClipboard) }
         set { defaults.set(newValue, forKey: Key.screenshotClipboard) }
+    }
+
+    var automaticUpdateChecksEnabled: Bool {
+        get { defaults.bool(forKey: Key.automaticUpdateChecks) }
+        set { defaults.set(newValue, forKey: Key.automaticUpdateChecks) }
+    }
+
+    var lastUpdateCheckDate: Date? {
+        get { defaults.object(forKey: Key.lastUpdateCheckDate) as? Date }
+        set {
+            if let newValue {
+                defaults.set(newValue, forKey: Key.lastUpdateCheckDate)
+            } else {
+                defaults.removeObject(forKey: Key.lastUpdateCheckDate)
+            }
+        }
     }
 
     var voiceInputEnabled: Bool {

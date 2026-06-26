@@ -9,6 +9,7 @@ final class StatusBarController: NSObject {
     private let windowlessAppQuitter: WindowlessAppQuitter
     private let switcher: SwitcherController
     private let screenshotClipboard: ScreenshotClipboardController
+    private let updateChecker: UpdateChecker
     private let logitechManager: LogitechManager
     private let voiceInput: VoiceInputController
     private let userGuide = UserGuideWindowController()
@@ -32,6 +33,7 @@ final class StatusBarController: NSObject {
     private var voiceAIKeyItem: NSMenuItem?
     private var voiceInputModeItem: NSMenuItem?
     private var loginItem: NSMenuItem?
+    private var automaticUpdatesItem: NSMenuItem?
     private var accessibilityItem: NSMenuItem?
     private var screenRecordingItem: NSMenuItem?
     private var microphoneItem: NSMenuItem?
@@ -43,6 +45,7 @@ final class StatusBarController: NSObject {
         windowlessAppQuitter: WindowlessAppQuitter,
         switcher: SwitcherController,
         screenshotClipboard: ScreenshotClipboardController,
+        updateChecker: UpdateChecker,
         logitechManager: LogitechManager,
         voiceInput: VoiceInputController
     ) {
@@ -51,6 +54,7 @@ final class StatusBarController: NSObject {
         self.windowlessAppQuitter = windowlessAppQuitter
         self.switcher = switcher
         self.screenshotClipboard = screenshotClipboard
+        self.updateChecker = updateChecker
         self.logitechManager = logitechManager
         self.voiceInput = voiceInput
         super.init()
@@ -104,6 +108,18 @@ final class StatusBarController: NSObject {
         let guide = NSMenuItem(title: "User Guide", action: #selector(showUserGuide), keyEquivalent: "")
         guide.target = self
         menu.addItem(guide)
+
+        let checkForUpdates = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates), keyEquivalent: "")
+        checkForUpdates.target = self
+        menu.addItem(checkForUpdates)
+
+        let automaticUpdates = toggle(
+            "Automatically Check for Updates",
+            #selector(toggleAutomaticUpdates),
+            settings.automaticUpdateChecksEnabled
+        )
+        menu.addItem(automaticUpdates)
+        automaticUpdatesItem = automaticUpdates
 
         let permissions = NSMenuItem(title: "Permissions", action: nil, keyEquivalent: "")
         let permissionsMenu = NSMenu()
@@ -485,6 +501,20 @@ final class StatusBarController: NSObject {
         userGuide.showGuide()
     }
 
+    @objc private func checkForUpdates() {
+        statusItem.menu?.cancelTracking()
+        DispatchQueue.main.async { [weak self] in
+            self?.updateChecker.checkForUpdates(userInitiated: true)
+        }
+    }
+
+    @objc private func toggleAutomaticUpdates(_ sender: NSMenuItem) {
+        let isEnabled = !settings.automaticUpdateChecksEnabled
+        updateChecker.setAutomaticChecksEnabled(isEnabled)
+        sender.state = isEnabled ? .on : .off
+        automaticUpdatesItem?.state = sender.state
+    }
+
     private func showLogitechDevice(_ deviceID: String) {
         guard let device = logitechManager.device(withID: deviceID) else { return }
         let controller = logitechWindows[deviceID] ?? LogitechDeviceWindowController(
@@ -676,6 +706,7 @@ extension StatusBarController: NSMenuDelegate {
         screenRecordingItem?.state = Permissions.hasScreenRecording ? .on : .off
         microphoneItem?.state = Permissions.hasMicrophone ? .on : .off
         speechRecognitionItem?.state = Permissions.hasSpeechRecognition ? .on : .off
+        automaticUpdatesItem?.state = settings.automaticUpdateChecksEnabled ? .on : .off
         updateVoiceInputMenuItems()
         logitechManager.refreshDevices()
     }
