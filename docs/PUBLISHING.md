@@ -104,5 +104,5 @@ gh release create "v$VERSION" \
   "dist/MacUtil-$VERSION.dmg" \
   "dist/MacUtil-$VERSION.dmg.sha256" \
   --title "MacUtil $VERSION" \
-  --notes "Developer ID signed DMG. See README for permissions and first-run notes."
+  --notes "Developer ID signed, notarized, and stapled DMG. See README for permissions and install notes."
 ```

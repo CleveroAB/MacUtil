@@ -7,10 +7,10 @@ It is built with Swift Package Manager, AppKit, Carbon hotkeys/event taps,
 Accessibility APIs, ScreenCaptureKit, Speech, and IOKit. There are no third-party
 package dependencies.
 
-> Status: personal utility / source build. MacUtil uses global hotkeys, event
-> taps, Accessibility APIs, ScreenCaptureKit, Logitech HID++ access, and a small
-> amount of undocumented macOS behavior. It is not positioned as an App Store
-> build.
+> Status: personal utility with a pre-built notarized DMG and source builds.
+> MacUtil uses global hotkeys, event taps, Accessibility APIs, ScreenCaptureKit,
+> Logitech HID++ access, and a small amount of undocumented macOS behavior. It
+> is not positioned as an App Store build.
 
 ## Preview
 
@@ -36,10 +36,11 @@ package dependencies.
 ## Requirements
 
 - macOS 14 or newer.
-- Xcode 26 or newer to build. The app references macOS 26 SpeechAnalyzer APIs
-  behind availability checks, so older SDKs do not contain all required symbols.
-- A code-signing identity is recommended so macOS privacy permissions survive
-  rebuilds.
+- Xcode 26 or newer only if building from source. The app references macOS 26
+  SpeechAnalyzer APIs behind availability checks, so older SDKs do not contain
+  all required symbols.
+- A code-signing identity is recommended for source builds so macOS privacy
+  permissions survive rebuilds.
 
 The app has been developed on Apple Silicon. It keeps macOS 14 as the runtime
 minimum and falls back to older Speech APIs below macOS 26 where needed. The
@@ -48,13 +49,14 @@ package is intentionally simple enough to open directly in Xcode via
 
 ## Download
 
-For normal use, download the latest `MacUtil-<version>.dmg` from
-[GitHub Releases](https://github.com/CleveroAB/MacUtil/releases), open it, and
-drag `MacUtil.app` to Applications.
+Most users do not need Xcode or Swift. Download the pre-built app from
+[GitHub Releases](https://github.com/CleveroAB/MacUtil/releases/latest):
 
-The release app is Developer ID signed. If a release is marked as not notarized,
-macOS Gatekeeper may require opening it with Control-click -> Open the first
-time.
+- [Download MacUtil 0.1.0 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.0/MacUtil-0.1.0.dmg)
+- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.0/MacUtil-0.1.0.dmg.sha256)
+
+Open the DMG and drag `MacUtil.app` to Applications. The release DMG is
+Developer ID signed, notarized, and stapled by Apple.
 
 ## Build And Run
 
