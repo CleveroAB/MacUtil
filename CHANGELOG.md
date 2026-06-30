@@ -5,6 +5,12 @@ All notable changes to MacUtil will be documented in this file.
 The format follows the spirit of Keep a Changelog, and this project uses
 semantic versioning once public releases begin.
 
+## [0.1.3] - 2026-06-30
+
+### Fixed
+
+- Wrapped the Cmd-Tab switcher into multiple rows so large window sets remain visible.
+
 ## [0.1.2] - 2026-06-26
 
 ### Changed
