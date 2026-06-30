@@ -1,6 +1,6 @@
 import AppKit
 
-/// The floating overlay that shows the row of window cards.
+/// The floating overlay that shows the grid of window cards.
 ///
 /// A borderless, non-activating `NSPanel`: it appears above everything without
 /// activating MacUtil, so the previously-focused app stays frontmost. Cards are
@@ -11,6 +11,7 @@ final class SwitcherPanel {
     private var cards: [SwitcherCard] = []
 
     private let spacing: CGFloat = 12
+    private let rowSpacing: CGFloat = 12
     private let padding: CGFloat = 20
 
     func show(
@@ -23,11 +24,16 @@ final class SwitcherPanel {
         hide()
 
         let cardSize = SwitcherCard.size
-
-        let stack = NSStackView()
-        stack.orientation = .horizontal
-        stack.spacing = spacing
-        stack.translatesAutoresizingMaskIntoConstraints = false
+        let maxPanelWidth = screen.visibleFrame.width - 80
+        let maxPanelHeight = screen.visibleFrame.height - 80
+        let maxContentWidth = max(cardSize.width, maxPanelWidth - padding * 2)
+        let maxColumns = max(1, Int((maxContentWidth + spacing) / (cardSize.width + spacing)))
+        let columns = max(1, min(windows.count, maxColumns))
+        let rows = Int(ceil(Double(windows.count) / Double(columns)))
+        let contentWidth = CGFloat(columns) * cardSize.width + CGFloat(max(0, columns - 1)) * spacing
+        let contentHeight = CGFloat(rows) * cardSize.height + CGFloat(max(0, rows - 1)) * rowSpacing
+        let panelWidth = contentWidth + padding * 2
+        let panelHeight = min(contentHeight + padding * 2, max(cardSize.height + padding * 2, maxPanelHeight))
 
         var builtCards: [SwitcherCard] = []
         for (index, window) in windows.enumerated() {
@@ -37,18 +43,18 @@ final class SwitcherPanel {
                 onHover: { onHover(index) },
                 onClick: { onClick(index) }
             )
-            card.translatesAutoresizingMaskIntoConstraints = false
-            card.widthAnchor.constraint(equalToConstant: cardSize.width).isActive = true
-            card.heightAnchor.constraint(equalToConstant: cardSize.height).isActive = true
-            stack.addArrangedSubview(card)
+            card.setFrameSize(cardSize)
             builtCards.append(card)
         }
 
-        let contentWidth = CGFloat(windows.count) * cardSize.width
-            + CGFloat(max(0, windows.count - 1)) * spacing
-        let maxWidth = screen.visibleFrame.width - 80
-        let panelWidth = min(contentWidth + padding * 2, maxWidth)
-        let panelHeight = cardSize.height + padding * 2
+        let grid = SwitcherGridView(
+            cards: builtCards,
+            columns: columns,
+            cardSize: cardSize,
+            spacing: spacing,
+            rowSpacing: rowSpacing
+        )
+        grid.frame = NSRect(x: 0, y: 0, width: contentWidth, height: contentHeight)
 
         let background = NSVisualEffectView()
         background.material = .hudWindow
@@ -62,11 +68,11 @@ final class SwitcherPanel {
         let scroll = NSScrollView()
         scroll.drawsBackground = false
         scroll.hasHorizontalScroller = false
-        scroll.hasVerticalScroller = false
+        scroll.hasVerticalScroller = contentHeight + padding * 2 > panelHeight
         scroll.horizontalScrollElasticity = .none
-        scroll.verticalScrollElasticity = .none
+        scroll.verticalScrollElasticity = .allowed
         scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.documentView = stack
+        scroll.documentView = grid
 
         background.addSubview(scroll)
         NSLayoutConstraint.activate([
@@ -74,11 +80,6 @@ final class SwitcherPanel {
             scroll.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -padding),
             scroll.topAnchor.constraint(equalTo: background.topAnchor, constant: padding),
             scroll.bottomAnchor.constraint(equalTo: background.bottomAnchor, constant: -padding),
-
-            stack.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: scroll.contentView.bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            stack.heightAnchor.constraint(equalToConstant: cardSize.height),
         ])
 
         let panel = NSPanel(
@@ -121,5 +122,60 @@ final class SwitcherPanel {
         panel?.orderOut(nil)
         panel = nil
         cards = []
+    }
+}
+
+private final class SwitcherGridView: NSView {
+    private let cards: [SwitcherCard]
+    private let columns: Int
+    private let cardSize: NSSize
+    private let spacing: CGFloat
+    private let rowSpacing: CGFloat
+
+    override var isFlipped: Bool { true }
+
+    init(
+        cards: [SwitcherCard],
+        columns: Int,
+        cardSize: NSSize,
+        spacing: CGFloat,
+        rowSpacing: CGFloat
+    ) {
+        self.cards = cards
+        self.columns = columns
+        self.cardSize = cardSize
+        self.spacing = spacing
+        self.rowSpacing = rowSpacing
+        super.init(frame: .zero)
+
+        for card in cards {
+            addSubview(card)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override var intrinsicContentSize: NSSize {
+        let rows = Int(ceil(Double(cards.count) / Double(columns)))
+        return NSSize(
+            width: CGFloat(columns) * cardSize.width + CGFloat(max(0, columns - 1)) * spacing,
+            height: CGFloat(rows) * cardSize.height + CGFloat(max(0, rows - 1)) * rowSpacing
+        )
+    }
+
+    override func layout() {
+        super.layout()
+
+        for (index, card) in cards.enumerated() {
+            let column = index % columns
+            let row = index / columns
+            card.frame = NSRect(
+                x: CGFloat(column) * (cardSize.width + spacing),
+                y: CGFloat(row) * (cardSize.height + rowSpacing),
+                width: cardSize.width,
+                height: cardSize.height
+            )
+        }
     }
 }
