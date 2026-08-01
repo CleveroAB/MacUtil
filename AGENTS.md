@@ -39,6 +39,7 @@ Sources/MacUtil/
   main.swift / AppDelegate.swift     app bootstrap and menu-bar agent lifecycle
   AppCleanup/                        optional cleanup of windowless apps
   Logitech/                          Logitech HID/device UI support
+  PastePaths/                        ⌘V rewriting: paste file paths into apps that reject files
   Permissions/                       Accessibility and Screen Recording checks/prompts
   Settings/                          UserDefaults-backed settings
   Screenshots/                       native screenshot clipboard mirroring

@@ -12,6 +12,7 @@ final class StatusBarController: NSObject {
     private let updateChecker: UpdateChecker
     private let logitechManager: LogitechManager
     private let voiceInput: VoiceInputController
+    private let pathPaste: PathPasteController
     private let userGuide = UserGuideWindowController()
     private let settings = Settings.shared
     private var logitechWindows: [String: LogitechDeviceWindowController] = [:]
@@ -32,6 +33,10 @@ final class StatusBarController: NSObject {
     private var voiceAIModelItem: NSMenuItem?
     private var voiceAIKeyItem: NSMenuItem?
     private var voiceInputModeItem: NSMenuItem?
+    private var pathPasteItem: NSMenuItem?
+    private var pathPasteEnabledItem: NSMenuItem?
+    private var pathPasteAppItem: NSMenuItem?
+    private var keepAwakeItem: NSMenuItem?
     private var loginItem: NSMenuItem?
     private var automaticUpdatesItem: NSMenuItem?
     private var accessibilityItem: NSMenuItem?
@@ -47,7 +52,8 @@ final class StatusBarController: NSObject {
         screenshotClipboard: ScreenshotClipboardController,
         updateChecker: UpdateChecker,
         logitechManager: LogitechManager,
-        voiceInput: VoiceInputController
+        voiceInput: VoiceInputController,
+        pathPaste: PathPasteController
     ) {
         self.snapManager = snapManager
         self.dragMonitor = dragMonitor
@@ -57,6 +63,7 @@ final class StatusBarController: NSObject {
         self.updateChecker = updateChecker
         self.logitechManager = logitechManager
         self.voiceInput = voiceInput
+        self.pathPaste = pathPaste
         super.init()
         configureButton()
         statusItem.menu = buildMenu()
@@ -96,10 +103,25 @@ final class StatusBarController: NSObject {
         menu.addItem(toggle("Quit Apps Without Windows", #selector(toggleWindowlessQuitter), settings.windowlessQuitterEnabled, keyEquivalent: "q", modifiers: [.command, .shift]))
         menu.addItem(toggle("Copy Screenshots to Clipboard", #selector(toggleScreenshotClipboard), settings.screenshotClipboardEnabled))
 
+        let keepAwake = NSMenuItem(
+            title: "Keep Mac Awake With Lid Closed",
+            action: #selector(toggleKeepAwake),
+            keyEquivalent: ""
+        )
+        keepAwake.target = self
+        menu.addItem(keepAwake)
+        keepAwakeItem = keepAwake
+        updateKeepAwakeMenuItem()
+
         let voice = toggle("Voice-to-Text", #selector(toggleVoiceInput), settings.voiceInputEnabled)
         voice.submenu = voiceInputMenu()
         menu.addItem(voice)
         voiceInputItem = voice
+
+        let pathPasteToggle = toggle("Paste File Paths", #selector(togglePathPaste), settings.pathPasteEnabled)
+        pathPasteToggle.submenu = pathPasteMenu()
+        menu.addItem(pathPasteToggle)
+        pathPasteItem = pathPasteToggle
 
         menu.addItem(.separator())
         addLogitechDevices(to: menu)
@@ -324,6 +346,35 @@ final class StatusBarController: NSObject {
         return submenu
     }
 
+    private func pathPasteMenu() -> NSMenu {
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+
+        let enabled = NSMenuItem(title: "Enabled", action: #selector(togglePathPaste), keyEquivalent: "")
+        enabled.target = self
+        enabled.state = settings.pathPasteEnabled ? .on : .off
+        submenu.addItem(enabled)
+        pathPasteEnabledItem = enabled
+
+        let info = NSMenuItem(
+            title: "Pastes full paths when copied files are not images/PDFs",
+            action: nil,
+            keyEquivalent: ""
+        )
+        info.isEnabled = false
+        submenu.addItem(info)
+
+        submenu.addItem(.separator())
+
+        let app = NSMenuItem(title: pathPasteAppTitle(), action: #selector(togglePathPasteApp), keyEquivalent: "")
+        app.target = self
+        app.isEnabled = canTargetCurrentApplication()
+        submenu.addItem(app)
+        pathPasteAppItem = app
+
+        return submenu
+    }
+
     private func updatesMenu() -> NSMenu {
         let submenu = NSMenu()
         submenu.autoenablesItems = false
@@ -394,6 +445,22 @@ final class StatusBarController: NSObject {
         "OpenRouter Model: \(settings.openRouterModel)"
     }
 
+    private func pathPasteAppTitle() -> String {
+        guard canTargetCurrentApplication(),
+              let appName = NSWorkspace.shared.frontmostApplication?.localizedName else {
+            return "Current App Unavailable"
+        }
+        return pathPaste.isCurrentApplicationEnabled()
+            ? "Disable in \(appName)"
+            : "Enable in \(appName)"
+    }
+
+    private func canTargetCurrentApplication() -> Bool {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return false }
+        return app.processIdentifier != ProcessInfo.processInfo.processIdentifier
+            && app.bundleIdentifier != nil
+    }
+
     private func snapGroup(_ action: SnapAction) -> Int {
         switch action {
         case .leftHalf, .rightHalf, .topHalf, .bottomHalf,
@@ -445,6 +512,13 @@ final class StatusBarController: NSObject {
         settings.screenshotClipboardEnabled.toggle()
         settings.screenshotClipboardEnabled ? screenshotClipboard.start() : screenshotClipboard.stop()
         sender.state = settings.screenshotClipboardEnabled ? .on : .off
+    }
+
+    @objc private func toggleKeepAwake() {
+        statusItem.menu?.cancelTracking()
+        DispatchQueue.main.async { [weak self] in
+            self?.changeKeepAwakeSetting()
+        }
     }
 
     @objc private func toggleVoiceInput(_ sender: NSMenuItem) {
@@ -501,6 +575,17 @@ final class StatusBarController: NSObject {
         DispatchQueue.main.async { [weak self] in
             self?.showOpenRouterModelPrompt()
         }
+    }
+
+    @objc private func togglePathPaste(_ sender: NSMenuItem) {
+        settings.pathPasteEnabled.toggle()
+        settings.pathPasteEnabled ? pathPaste.start() : pathPaste.stop()
+        updatePathPasteMenuItems()
+    }
+
+    @objc private func togglePathPasteApp() {
+        pathPaste.setCurrentApplicationEnabled(!pathPaste.isCurrentApplicationEnabled())
+        updatePathPasteMenuItems()
     }
 
     @objc private func toggleLogin(_ sender: NSMenuItem) {
@@ -595,6 +680,77 @@ final class StatusBarController: NSObject {
         voiceAIUseClipboardContextItem?.state = settings.voiceAIUseClipboardContext ? .on : .off
         voiceAIModelItem?.title = openRouterModelTitle()
         voiceAIKeyItem?.title = openRouterAPIKeyTitle()
+    }
+
+    private func updatePathPasteMenuItems() {
+        pathPasteItem?.state = settings.pathPasteEnabled ? .on : .off
+        pathPasteEnabledItem?.state = settings.pathPasteEnabled ? .on : .off
+        pathPasteAppItem?.title = pathPasteAppTitle()
+        pathPasteAppItem?.isEnabled = canTargetCurrentApplication()
+    }
+
+    private func updateKeepAwakeMenuItem() {
+        guard let keepAwakeItem else { return }
+        switch SystemSleepControl.state {
+        case .enabled:
+            keepAwakeItem.title = "Keep Mac Awake With Lid Closed"
+            keepAwakeItem.state = .on
+            keepAwakeItem.isEnabled = true
+            keepAwakeItem.toolTip = "System sleep is disabled until this is turned off."
+        case .disabled:
+            keepAwakeItem.title = "Keep Mac Awake With Lid Closed"
+            keepAwakeItem.state = .off
+            keepAwakeItem.isEnabled = true
+            keepAwakeItem.toolTip = "Requires administrator approval."
+        case .unavailable:
+            keepAwakeItem.title = "Keep Mac Awake With Lid Closed (Unavailable)"
+            keepAwakeItem.state = .off
+            keepAwakeItem.isEnabled = false
+            keepAwakeItem.toolTip = "MacUtil could not read the macOS system sleep setting."
+        }
+    }
+
+    private func changeKeepAwakeSetting() {
+        let currentState = SystemSleepControl.state
+        guard currentState != .unavailable else {
+            showKeepAwakeError("MacUtil could not read the macOS system sleep setting.")
+            return
+        }
+
+        let shouldEnable = currentState == .disabled
+        if shouldEnable && !confirmKeepAwakeEnable() { return }
+
+        do {
+            try SystemSleepControl.setEnabled(shouldEnable)
+        } catch SystemSleepControl.ChangeError.cancelled {
+            return
+        } catch {
+            showKeepAwakeError(error.localizedDescription)
+        }
+        updateKeepAwakeMenuItem()
+    }
+
+    private func confirmKeepAwakeEnable() -> Bool {
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "Keep Mac Awake With the Lid Closed?"
+        alert.informativeText = "This disables all system sleep so remote sessions and running agents can continue after the lid closes. Keep the Mac connected to power and well ventilated, and never put it in a bag while this is enabled. macOS may still shut down for a low battery or thermal emergency."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Keep Awake")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func showKeepAwakeError(_ message: String) {
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "Keep Mac Awake"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     private func startVoiceAnimation() {
@@ -718,7 +874,9 @@ extension StatusBarController: NSMenuDelegate {
         microphoneItem?.state = Permissions.hasMicrophone ? .on : .off
         speechRecognitionItem?.state = Permissions.hasSpeechRecognition ? .on : .off
         automaticUpdatesItem?.state = settings.automaticUpdateChecksEnabled ? .on : .off
+        updateKeepAwakeMenuItem()
         updateVoiceInputMenuItems()
+        updatePathPasteMenuItems()
         logitechManager.refreshDevices()
     }
 

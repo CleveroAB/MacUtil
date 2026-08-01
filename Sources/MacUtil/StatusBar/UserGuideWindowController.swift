@@ -110,6 +110,19 @@ final class UserGuideWindowController: NSWindowController {
             GuideRow("AI setup", .note("Set OpenRouter key and model in the Voice-to-Text menu")),
         ]))
 
+        stack.addArrangedSubview(section("Paste File Paths", rows: [
+            GuideRow("Copy files in Finder", .keys([["⌘", "C"]])),
+            GuideRow("Paste in an enabled app", .keys([["⌘", "V"]])),
+            GuideRow("Result", .note("Full file paths are pasted when files are not images/PDFs")),
+            GuideRow("Per-app opt-in", .note("Use the Paste File Paths menu while the app is frontmost")),
+        ]))
+
+        stack.addArrangedSubview(section("Lid-Closed Remote Access", rows: [
+            GuideRow("Keep Mac awake", .note("Enable from the menu; administrator approval is required")),
+            GuideRow("Effect", .note("Disables all system sleep, including when the lid closes")),
+            GuideRow("Safety", .note("Connect power and keep the Mac well ventilated")),
+        ]))
+
         stack.addArrangedSubview(section("App Cleanup", rows: [
             GuideRow("Quits unused apps", .keys([["⌘", "⇧", "Q"]])),
         ]))
@@ -142,7 +155,7 @@ final class UserGuideWindowController: NSWindowController {
         title.textColor = .labelColor
 
         let subtitle = NSTextField(wrappingLabelWithString:
-            "Keyboard-driven window placement, app switching, voice input, and cleanup from the menu bar.")
+            "Window placement, app switching, voice input, remote access, and cleanup from the menu bar.")
         subtitle.font = .systemFont(ofSize: 13)
         subtitle.textColor = .secondaryLabelColor
         subtitle.preferredMaxLayoutWidth = 420

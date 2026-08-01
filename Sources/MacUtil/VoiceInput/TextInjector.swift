@@ -24,31 +24,62 @@ struct TextInsertionTarget {
 }
 
 final class TextInjector {
-    func paste(_ text: String, into target: TextInsertionTarget) -> Bool {
+    private static let markerType = NSPasteboard.PasteboardType("se.clevero.macutil.injection.marker")
+
+    /// Insert `text` at the target's caret via a synthetic ⌘V, saving and
+    /// restoring the user's pasteboard.
+    ///
+    /// - Parameters:
+    ///   - activateApp: raise the target app before pasting. Voice input needs
+    ///     this (the app may be backgrounded); callers pasting into the field
+    ///     being edited must not, since activating another app is disruptive.
+    ///   - transient: mark the injected item transient/concealed so clipboard
+    ///     managers (Alfred, Maccy, Raycast) don't archive an in-place correction.
+    func paste(
+        _ text: String,
+        into target: TextInsertionTarget,
+        activateApp: Bool = true,
+        transient: Bool = false
+    ) -> Bool {
         guard !text.isEmpty else { return false }
+        // A synthetic ⌘V is dropped while Secure Event Input is held, so bail
+        // rather than clobber the pasteboard for a paste that can't land.
+        guard !Permissions.isSecureInputActive else {
+            DebugLog.log("[MacUtil] text injector: skipped, secure input active")
+            return false
+        }
 
         let pasteboard = NSPasteboard.general
         let previousItems = pasteboard.pasteboardItems?.compactMap(copyPasteboardItem) ?? []
-        let marker = "macutil-voice-\(UUID().uuidString)"
+        let marker = "macutil-injection-\(UUID().uuidString)"
         let payload = text
 
         pasteboard.clearContents()
         pasteboard.setString(payload, forType: .string)
-        pasteboard.setString(marker, forType: NSPasteboard.PasteboardType("se.clevero.macutil.voice.marker"))
-        DebugLog.log("[MacUtil] voice: wrote \(payload.count) characters to pasteboard")
+        pasteboard.setString(marker, forType: Self.markerType)
+        if transient {
+            pasteboard.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+            pasteboard.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+        }
+        DebugLog.log("[MacUtil] text injector: wrote \(payload.count) characters to pasteboard")
 
-        target.app?.activate(options: [.activateAllWindows])
+        if activateApp {
+            target.app?.activate(options: [.activateAllWindows])
+        }
         if let focusedElement = target.focusedElement {
             AXUIElementSetAttributeValue(focusedElement, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
+        // Post the keystrokes off the main thread: postPasteShortcut() sleeps to
+        // separate the key events, and blocking the main thread stalls the whole
+        // menu-bar agent. CGEvent posting is thread-safe.
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.10) {
             self.postPasteShortcut()
-            DebugLog.log("[MacUtil] voice: posted Cmd-V paste shortcut")
+            DebugLog.log("[MacUtil] text injector: posted Cmd-V paste shortcut")
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-            guard pasteboard.string(forType: NSPasteboard.PasteboardType("se.clevero.macutil.voice.marker")) == marker else {
+            guard pasteboard.string(forType: Self.markerType) == marker else {
                 return
             }
             pasteboard.clearContents()

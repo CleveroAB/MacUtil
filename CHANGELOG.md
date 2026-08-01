@@ -5,6 +5,26 @@ All notable changes to MacUtil will be documented in this file.
 The format follows the spirit of Keep a Changelog, and this project uses
 semantic versioning once public releases begin.
 
+## [0.1.4] - 2026-08-01
+
+### Added
+
+- Paste File Paths: in opted-in apps (T3 Code by default), pressing ⌘V with
+  copied files that are not all images/PDFs pastes the files' full paths as text
+  and then restores the pasteboard.
+- A system-wide "Keep Mac Awake With Lid Closed" menu toggle for uninterrupted
+  remote access and long-running agents.
+
+### Changed
+
+- Limited the Cmd-Tab switcher to seven columns, centered incomplete rows, and
+  positioned it within the display's visible frame.
+
+### Fixed
+
+- Made paste-based text injection avoid Secure Event Input and perform its
+  synthetic keystroke without blocking the app's main thread.
+
 ## [0.1.3] - 2026-06-30
 
 ### Fixed

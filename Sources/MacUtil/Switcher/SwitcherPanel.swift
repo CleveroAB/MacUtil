@@ -13,6 +13,7 @@ final class SwitcherPanel {
     private let spacing: CGFloat = 12
     private let rowSpacing: CGFloat = 12
     private let padding: CGFloat = 20
+    private let preferredMaxColumns = 7
 
     func show(
         windows: [SwitchWindow],
@@ -27,7 +28,8 @@ final class SwitcherPanel {
         let maxPanelWidth = screen.visibleFrame.width - 80
         let maxPanelHeight = screen.visibleFrame.height - 80
         let maxContentWidth = max(cardSize.width, maxPanelWidth - padding * 2)
-        let maxColumns = max(1, Int((maxContentWidth + spacing) / (cardSize.width + spacing)))
+        let availableColumns = max(1, Int((maxContentWidth + spacing) / (cardSize.width + spacing)))
+        let maxColumns = max(1, min(preferredMaxColumns, availableColumns))
         let columns = max(1, min(windows.count, maxColumns))
         let rows = Int(ceil(Double(windows.count) / Double(columns)))
         let contentWidth = CGFloat(columns) * cardSize.width + CGFloat(max(0, columns - 1)) * spacing
@@ -98,8 +100,8 @@ final class SwitcherPanel {
         panel.contentView = background
 
         let origin = NSPoint(
-            x: screen.frame.midX - panelWidth / 2,
-            y: screen.frame.midY - panelHeight / 2
+            x: screen.visibleFrame.midX - panelWidth / 2,
+            y: screen.visibleFrame.midY - panelHeight / 2
         )
         panel.setFrameOrigin(origin)
         panel.orderFrontRegardless()
@@ -170,8 +172,12 @@ private final class SwitcherGridView: NSView {
         for (index, card) in cards.enumerated() {
             let column = index % columns
             let row = index / columns
+            let rowStart = row * columns
+            let rowCardCount = min(columns, cards.count - rowStart)
+            let rowWidth = CGFloat(rowCardCount) * cardSize.width + CGFloat(max(0, rowCardCount - 1)) * spacing
+            let rowX = max(0, (bounds.width - rowWidth) / 2)
             card.frame = NSRect(
-                x: CGFloat(column) * (cardSize.width + spacing),
+                x: rowX + CGFloat(column) * (cardSize.width + spacing),
                 y: CGFloat(row) * (cardSize.height + rowSpacing),
                 width: cardSize.width,
                 height: cardSize.height

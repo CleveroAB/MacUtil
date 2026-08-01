@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import AVFoundation
+import Carbon
 import CoreGraphics
 import Speech
 
@@ -30,6 +31,20 @@ enum Permissions {
 
     static func openAccessibilitySettings() {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+    }
+
+    // MARK: Secure Event Input
+
+    /// True while any process holds Secure Event Input — password fields,
+    /// 1Password, Terminal's "Secure Keyboard Entry", login prompts.
+    ///
+    /// Per TN2150, once any process calls `EnableSecureEventInput()` keyboard
+    /// events stop reaching *all* CGEvent taps system-wide (foreground and
+    /// background), and synthetic keystrokes are dropped. Both our input event
+    /// tap and the ⌘V pasteboard injection are silently defeated while this is
+    /// true, so callers should refuse those paths rather than time out opaquely.
+    static var isSecureInputActive: Bool {
+        IsSecureEventInputEnabled()
     }
 
     // MARK: Screen Recording

@@ -31,6 +31,8 @@ package dependencies.
 - Command-Shift-Q helper that quits regular apps without visible windows.
 - Copies native macOS screenshots to the clipboard immediately while keeping the
   normal floating thumbnail and Desktop/configured-folder save behavior.
+- Optional system-wide sleep prevention keeps remote sessions and running agents
+  alive when a MacBook lid is closed.
 - Manual update checks plus opt-in automatic daily checks via GitHub Releases.
 - Launch-at-login toggle and live permission status in the menu-bar app.
 
@@ -53,8 +55,8 @@ package is intentionally simple enough to open directly in Xcode via
 Most users do not need Xcode or Swift. Download the pre-built app from
 [GitHub Releases](https://github.com/CleveroAB/MacUtil/releases/latest):
 
-- [Download MacUtil 0.1.3 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.3/MacUtil-0.1.3.dmg)
-- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.3/MacUtil-0.1.3.dmg.sha256)
+- [Download MacUtil 0.1.4 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.4/MacUtil-0.1.4.dmg)
+- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.4/MacUtil-0.1.4.dmg.sha256)
 
 Open the DMG and drag `MacUtil.app` to Applications. The release DMG is
 Developer ID signed, notarized, and stapled by Apple.
@@ -79,7 +81,7 @@ Permissions submenu that opens the relevant panes and shows current status.
 
 | Permission | Used For |
 | --- | --- |
-| Accessibility | Moving/resizing windows, focusing switcher selections, global event taps, paste injection. |
+| Accessibility | Moving/resizing windows, focusing switcher selections, global event taps, and paste injection. |
 | Screen Recording | Live switcher thumbnails and immediate screenshot clipboard mirroring. Without it, the switcher can still show app icons and titles. |
 | Microphone | Voice-to-text recording. |
 | Speech Recognition | Apple speech transcription / SpeechAnalyzer. |
@@ -136,6 +138,37 @@ AI email replies are optional. When enabled and invoked, MacUtil sends the spoke
 intent, the selected OpenRouter model, and optionally clipboard context to
 OpenRouter. The OpenRouter API key is stored in Keychain. See
 [docs/PRIVACY.md](docs/PRIVACY.md) for details.
+
+### Paste File Paths
+
+Some chat-style apps (for example AI coding chats) only accept pasted images and
+PDFs and reject other file types. With "Paste File Paths" enabled, copying files
+in Finder and pressing ⌘V in an opted-in app pastes the files' full paths as
+plain text (one per line) instead. If everything copied is an image or PDF, the
+paste is left untouched. The pasteboard is restored right after the paste, so a
+later ⌘V elsewhere still pastes the original files.
+
+The feature is opt-in per app: bring the target app to the front, then choose
+"Enable in <app>" from the Paste File Paths submenu. T3 Code is enabled by
+default.
+
+### Lid-Closed Remote Access
+
+Enable "Keep Mac Awake With Lid Closed" from the menu bar to disable system
+sleep, including lid-close sleep. This keeps remote sessions and long-running
+agents available without requiring an external display. macOS asks for an
+administrator password when the setting is changed.
+
+The setting is system-wide and remains active until it is turned off from the
+same menu. While it is enabled, automatic sleep and manual system sleep are also
+disabled. Keep the Mac connected to power and well ventilated; low-battery and
+thermal protection can still stop the machine. Never put the Mac in a bag or
+other enclosed space while this is enabled. If MacUtil is unavailable, reset the
+setting in Terminal with:
+
+```bash
+sudo pmset -a disablesleep 0
+```
 
 ### Screenshots
 
@@ -201,9 +234,10 @@ Sources/MacUtil/
   Permissions/                       Accessibility and privacy permissions
   Settings/                          UserDefaults-backed settings
   Snapping/                          hotkeys, drag snapping, AX movement
+  PastePaths/                        paste file paths into apps that reject files
   Screenshots/                       native screenshot clipboard mirroring
   StatusBar/                         menu-bar UI and guide window
-  Support/                           logging, geometry, login item helpers
+  Support/                           logging, geometry, login item, power helpers
   Switcher/                          Cmd-Tab switcher and thumbnails
   VoiceInput/                        dictation, speech, OpenRouter reply helper
 Resources/

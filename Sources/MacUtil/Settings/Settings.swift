@@ -21,6 +21,8 @@ final class Settings {
         static let voiceAIReply = "voiceAIReplyEnabled"
         static let voiceAIUseClipboardContext = "voiceAIUseClipboardContext"
         static let openRouterModel = "openRouterModel"
+        static let pathPaste = "pathPasteEnabled"
+        static let pathPasteBundleIdentifiers = "pathPasteBundleIdentifiers"
         static let logitechGestureActions = "logitechGestureActions"
         static let logitechSideButtonActions = "logitechSideButtonActions"
         static let logitechDPIValues = "logitechDPIValues"
@@ -39,6 +41,8 @@ final class Settings {
             Key.voiceAIReply: true,
             Key.voiceAIUseClipboardContext: true,
             Key.openRouterModel: "~openai/gpt-latest",
+            Key.pathPaste: true,
+            Key.pathPasteBundleIdentifiers: ["com.t3tools.t3code"],
             Key.logitechGestureActions: [:],
             Key.logitechSideButtonActions: [:],
             Key.logitechDPIValues: [:],
@@ -116,6 +120,16 @@ final class Settings {
             let value = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
             defaults.set(value.isEmpty ? "~openai/gpt-latest" : value, forKey: Key.openRouterModel)
         }
+    }
+
+    var pathPasteEnabled: Bool {
+        get { defaults.bool(forKey: Key.pathPaste) }
+        set { defaults.set(newValue, forKey: Key.pathPaste) }
+    }
+
+    var pathPasteBundleIdentifiers: Set<String> {
+        get { Set(defaults.stringArray(forKey: Key.pathPasteBundleIdentifiers) ?? []) }
+        set { defaults.set(newValue.sorted(), forKey: Key.pathPasteBundleIdentifiers) }
     }
 
     func logitechGestureAction(for deviceID: String) -> LogitechGestureAction {

@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateChecker = UpdateChecker()
     private let logitechManager = LogitechManager()
     private let voiceInput = VoiceInputController()
+    private let pathPaste = PathPasteController()
     private var statusBar: StatusBarController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -30,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settings.switcherEnabled { switcher.start() }
         if settings.screenshotClipboardEnabled { screenshotClipboard.start() }
         if settings.voiceInputEnabled { voiceInput.start() }
+        if settings.pathPasteEnabled { pathPaste.start() }
         updateChecker.start()
 
         statusBar = StatusBarController(
@@ -40,7 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             screenshotClipboard: screenshotClipboard,
             updateChecker: updateChecker,
             logitechManager: logitechManager,
-            voiceInput: voiceInput
+            voiceInput: voiceInput,
+            pathPaste: pathPaste
         )
         logitechManager.start()
     }
@@ -49,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateChecker.stop()
         screenshotClipboard.stop()
         voiceInput.stop()
+        pathPaste.stop()
         logitechManager.stop()
     }
 }

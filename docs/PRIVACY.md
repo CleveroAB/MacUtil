@@ -88,8 +88,10 @@ defaults delete se.clevero.macutil debugLoggingEnabled
 rm -f /tmp/macutil-debug.log
 ```
 
+## Paste File Paths
+
+When enabled for the frontmost app and the pasteboard holds copied files that are not all images/PDFs, MacUtil briefly replaces the pasteboard with the files' full paths while the user's own ⌘V is delivered, then restores the previous pasteboard contents about a second later. The temporary item is marked transient so clipboard managers do not archive it. File contents are never read, and nothing leaves the Mac.
+
 ## Settings Storage
 
-MacUtil stores feature toggles and device preferences in UserDefaults under the
-app bundle identifier `se.clevero.macutil`. The optional OpenRouter API key is
-stored in Keychain, not UserDefaults.
+MacUtil stores feature toggles and device preferences in UserDefaults under the app bundle identifier `se.clevero.macutil`. The optional OpenRouter API key is stored in Keychain, not UserDefaults.
