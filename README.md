@@ -55,8 +55,8 @@ package is intentionally simple enough to open directly in Xcode via
 Most users do not need Xcode or Swift. Download the pre-built app from
 [GitHub Releases](https://github.com/CleveroAB/MacUtil/releases/latest):
 
-- [Download MacUtil 0.1.4 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.4/MacUtil-0.1.4.dmg)
-- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.4/MacUtil-0.1.4.dmg.sha256)
+- [Download MacUtil 0.1.5 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.5/MacUtil-0.1.5.dmg)
+- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.5/MacUtil-0.1.5.dmg.sha256)
 
 Open the DMG and drag `MacUtil.app` to Applications. The release DMG is
 Developer ID signed, notarized, and stapled by Apple.
@@ -116,6 +116,7 @@ quarters.
 | Select with mouse | Move pointer over a preview |
 | Focus with mouse | Click a preview |
 | Close selected window | ⌘W while switcher is open |
+| Close with mouse | Click the ✕ on a hovered preview |
 | Quit selected app | ⌘Q while switcher is open |
 | Commit selection | Release ⌘ |
 | Cancel | Esc |

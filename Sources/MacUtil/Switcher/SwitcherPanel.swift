@@ -20,7 +20,8 @@ final class SwitcherPanel {
         thumbnails: [CGWindowID: NSImage],
         on screen: NSScreen,
         onHover: @escaping (Int) -> Void,
-        onClick: @escaping (Int) -> Void
+        onClick: @escaping (Int) -> Void,
+        onClose: @escaping (Int) -> Void
     ) {
         hide()
 
@@ -43,7 +44,8 @@ final class SwitcherPanel {
                 window: window,
                 thumbnail: thumbnails[window.id],
                 onHover: { onHover(index) },
-                onClick: { onClick(index) }
+                onClick: { onClick(index) },
+                onClose: { onClose(index) }
             )
             card.setFrameSize(cardSize)
             builtCards.append(card)

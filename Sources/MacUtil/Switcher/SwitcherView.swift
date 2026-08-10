@@ -8,16 +8,25 @@ final class SwitcherCard: NSView {
     private let thumbnailView = NSImageView()
     private let iconView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
+    private let closeButton = NSButton()
     private let onHover: () -> Void
     private let onClick: () -> Void
+    private let onClose: () -> Void
 
     var isSelected = false {
         didSet { updateSelection() }
     }
 
-    init(window: SwitchWindow, thumbnail: NSImage?, onHover: @escaping () -> Void, onClick: @escaping () -> Void) {
+    init(
+        window: SwitchWindow,
+        thumbnail: NSImage?,
+        onHover: @escaping () -> Void,
+        onClick: @escaping () -> Void,
+        onClose: @escaping () -> Void
+    ) {
         self.onHover = onHover
         self.onClick = onClick
+        self.onClose = onClose
         super.init(frame: NSRect(origin: .zero, size: Self.size))
         wantsLayer = true
         layer?.cornerRadius = 10
@@ -41,9 +50,20 @@ final class SwitcherCard: NSView {
         titleLabel.cell?.truncatesLastVisibleLine = true
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        closeButton.isBordered = false
+        closeButton.imagePosition = .imageOnly
+        closeButton.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Close window")?
+            .withSymbolConfiguration(.init(pointSize: 16, weight: .semibold))
+        closeButton.contentTintColor = .labelColor
+        closeButton.target = self
+        closeButton.action = #selector(closePressed)
+        closeButton.isHidden = true
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+
         addSubview(thumbnailView)
         addSubview(iconView)
         addSubview(titleLabel)
+        addSubview(closeButton)
 
         NSLayoutConstraint.activate([
             thumbnailView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
@@ -59,6 +79,11 @@ final class SwitcherCard: NSView {
             titleLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             titleLabel.centerYAnchor.constraint(equalTo: iconView.centerYAnchor),
+
+            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            closeButton.widthAnchor.constraint(equalToConstant: 22),
+            closeButton.heightAnchor.constraint(equalToConstant: 22),
         ])
 
         updateSelection()
@@ -81,10 +106,16 @@ final class SwitcherCard: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
+        closeButton.isHidden = false
         onHover()
     }
 
+    override func mouseExited(with event: NSEvent) {
+        closeButton.isHidden = true
+    }
+
     override func mouseMoved(with event: NSEvent) {
+        closeButton.isHidden = false
         onHover()
     }
 
@@ -98,6 +129,10 @@ final class SwitcherCard: NSView {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
+    }
+
+    @objc private func closePressed() {
+        onClose()
     }
 
     private func updateSelection() {

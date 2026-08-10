@@ -98,6 +98,7 @@ final class UserGuideWindowController: NSWindowController {
             GuideRow("Select a window", .note("Move pointer over preview")),
             GuideRow("Focus a window", .note("Click preview")),
             GuideRow("Close selected window", .keys([["⌘", "W"]])),
+            GuideRow("Close a window", .note("Click ✕ on a hovered preview")),
             GuideRow("Quit selected app", .keys([["⌘", "Q"]])),
             GuideRow("Cancel", .keys([["Esc"]])),
         ]))

@@ -23,6 +23,7 @@ final class SwitcherController {
     private var opening = false      // capturing thumbnails before the first show
     private var pendingSteps = 0     // net cycles requested before the panel appears
     private var openToken = 0        // guards against stale async captures
+    private var lastMouseLocation = NSPoint.zero  // gates hover: only a real move may select
     private(set) var isActive = false
 
     private var eventTap: CFMachPort?
@@ -173,6 +174,7 @@ final class SwitcherController {
         guard count > 0 else { teardown(); return }
         selection = ((pendingSteps % count) + count) % count
         visible = true
+        lastMouseLocation = NSEvent.mouseLocation
         showPanel()
         panel.select(index: selection)
         DebugLog.log("[MacUtil] switcher: shown \(count) windows, \(thumbnails.count) previews, sel=\(selection)")
@@ -185,6 +187,16 @@ final class SwitcherController {
             ? (selection + 1) % windows.count
             : (selection - 1 + windows.count) % windows.count
         panel.select(index: selection)
+    }
+
+    /// Hover events fire for a stationary cursor too — when the panel appears
+    /// under it, or when keyboard-driven scrolling slides a card beneath it.
+    /// Only an actual pointer move may steal the selection from ⌘Tab cycling.
+    private func hover(index: Int) {
+        let location = NSEvent.mouseLocation
+        guard hypot(location.x - lastMouseLocation.x, location.y - lastMouseLocation.y) > 1 else { return }
+        lastMouseLocation = location
+        select(index: index)
     }
 
     private func select(index: Int) {
@@ -234,12 +246,16 @@ final class SwitcherController {
     // MARK: Switcher commands
 
     private func closeSelectedWindow() {
+        close(index: selection)
+    }
+
+    private func close(index: Int) {
         guard
             visible,
-            windows.indices.contains(selection)
+            windows.indices.contains(index)
         else { return }
 
-        let target = windows[selection]
+        let target = windows[index]
         guard let axWindow = axWindow(matching: target) else {
             DebugLog.log("[MacUtil] switcher: close failed, AX window not found for \(target.appName):\(target.title)")
             return
@@ -296,10 +312,13 @@ final class SwitcherController {
             thumbnails: thumbnails,
             on: targetScreen(),
             onHover: { [weak self] index in
-                self?.select(index: index)
+                self?.hover(index: index)
             },
             onClick: { [weak self] index in
                 self?.commit(index: index)
+            },
+            onClose: { [weak self] index in
+                self?.close(index: index)
             }
         )
     }

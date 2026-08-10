@@ -5,6 +5,19 @@ All notable changes to MacUtil will be documented in this file.
 The format follows the spirit of Keep a Changelog, and this project uses
 semantic versioning once public releases begin.
 
+## [0.1.5] - 2026-08-10
+
+### Added
+
+- A ✕ close button in the top-right corner of hovered Cmd-Tab switcher
+  previews, closing that window while the switcher stays open.
+
+### Fixed
+
+- A stationary pointer no longer steals the Cmd-Tab switcher selection when the
+  panel opens or scrolls under it; hover selection now requires actually moving
+  the mouse.
+
 ## [0.1.4] - 2026-08-01
 
 ### Added
