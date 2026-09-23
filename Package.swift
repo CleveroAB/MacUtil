@@ -11,7 +11,8 @@ let package = Package(
         .executableTarget(
             name: "MacUtil",
             path: "Sources/MacUtil"
-        )
+        ),
+        .testTarget(name: "MacUtilTests", dependencies: ["MacUtil"])
     ],
     // Swift 5 language mode: AppKit/Carbon/AX are main-thread, callback-heavy C APIs.
     // Strict Swift 6 concurrency checking buys us nothing here and only adds friction.

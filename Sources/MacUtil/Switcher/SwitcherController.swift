@@ -11,9 +11,8 @@ import CoreGraphics
 /// when ⌘ is released. The tap is event-driven (only runs on key events), so
 /// idle cost stays at zero. Requires Accessibility.
 ///
-/// To avoid an icon→preview flicker, thumbnails are captured **before** the panel
-/// is shown, so every card renders its preview from the first frame. A quick
-/// ⌘Tab-and-release switches immediately without waiting for capture.
+/// Preview capture gets a short head start; icons appear after 150 ms at most.
+/// Slow AX enumeration and obsolete capture work never block the keyboard tap.
 final class SwitcherController {
     private let panel = SwitcherPanel()
     private var windows: [SwitchWindow] = []
@@ -22,22 +21,29 @@ final class SwitcherController {
     private var visible = false      // panel is on screen
     private var opening = false      // capturing thumbnails before the first show
     private var pendingSteps = 0     // net cycles requested before the panel appears
+    private var captureTask: Task<Void, Never>?
+    private var minimizedTask: Task<Void, Never>?
+    private var previewDeadline: DispatchWorkItem?
+    private var commitWhenReady = false
     private var openToken = 0        // guards against stale async captures
     private var lastMouseLocation = NSPoint.zero  // gates hover: only a real move may select
-    private(set) var isActive = false
+    var isActive: Bool {
+        guard Permissions.hasAccessibility, let eventTap else { return false }
+        return CGEvent.tapIsEnabled(tap: eventTap)
+    }
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
     func start() {
         guard !isActive else { return }
-        isActive = true
+        removeEventTap()
+        guard Permissions.hasAccessibility else { return }
         installEventTap()
+
     }
 
     func stop() {
-        guard isActive else { return }
-        isActive = false
         teardown()
         removeEventTap()
     }
@@ -135,11 +141,9 @@ final class SwitcherController {
 
     // MARK: Open / cycle
 
-    /// First ⌘Tab: enumerate now (fast), capture thumbnails async, then show the
-    /// panel already populated.
+    /// Visible metadata is immediate; minimized windows and previews arrive asynchronously.
     private func requestOpen(forward: Bool) {
         let list = WindowEnumerator.list()
-        guard !list.isEmpty else { return }
         windows = list
         pendingSteps = forward ? 1 : -1
         opening = true
@@ -153,13 +157,43 @@ final class SwitcherController {
         let cached = ThumbnailCapturer.cachedTargets(for: ids)
         let cacheHit = cached.count == ids.count
 
-        Task { [cacheHit, cached, ids, token] in
+        captureTask = Task { [cacheHit, cached, ids, token] in
             let thumbnails = cacheHit
                 ? await ThumbnailCapturer.capture(cached)
                 : await ThumbnailCapturer.captureLive(ids: ids)
             await MainActor.run { [weak self] in
-                guard let self, self.opening, self.openToken == token else { return }
-                self.finishOpen(thumbnails: thumbnails)
+                guard let self, !Task.isCancelled, self.openToken == token else { return }
+                self.previewDeadline?.cancel()
+                self.previewDeadline = nil
+                if self.opening { self.finishOpen(thumbnails: thumbnails) }
+                else if self.visible {
+                    self.thumbnails = thumbnails
+                    self.showPanel()
+                    self.panel.select(index: self.selection)
+                }
+            }
+        }
+
+        let deadline = DispatchWorkItem { [weak self] in
+            guard let self, self.opening, self.openToken == token else { return }
+            self.finishOpen(thumbnails: [:])
+        }
+        previewDeadline = deadline
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: deadline)
+        let visibleIDs = Set(list.map(\.id))
+        minimizedTask = Task.detached(priority: .userInitiated) { [weak self] in
+            let extra = WindowEnumerator.minimizedWindows(excluding: visibleIDs)
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self, self.openToken == token else { return }
+                self.windows.append(contentsOf: extra)
+                if self.windows.isEmpty { self.teardown() }
+                else if self.commitWhenReady { self.commitDuringOpening() }
+                else if self.opening && !self.windows.isEmpty { self.finishOpen(thumbnails: self.thumbnails) }
+                else if self.visible && !extra.isEmpty {
+                    self.showPanel()
+                    self.panel.select(index: self.selection)
+                }
             }
         }
 
@@ -168,10 +202,10 @@ final class SwitcherController {
     }
 
     private func finishOpen(thumbnails: [CGWindowID: NSImage]) {
-        opening = false
         self.thumbnails = thumbnails
         let count = windows.count
-        guard count > 0 else { teardown(); return }
+        guard count > 0 else { return }
+        opening = false
         selection = ((pendingSteps % count) + count) % count
         visible = true
         lastMouseLocation = NSEvent.mouseLocation
@@ -222,7 +256,8 @@ final class SwitcherController {
 
     /// ⌘ released before previews finished — switch immediately, skip the panel.
     private func commitDuringOpening() {
-        guard opening, !windows.isEmpty else { teardown(); return }
+        guard opening else { return }
+        guard !windows.isEmpty else { commitWhenReady = true; return }
         let count = windows.count
         let target = windows[((pendingSteps % count) + count) % count]
         teardown()
@@ -234,6 +269,14 @@ final class SwitcherController {
     }
 
     private func teardown() {
+        openToken &+= 1
+        captureTask?.cancel()
+        captureTask = nil
+        minimizedTask?.cancel()
+        minimizedTask = nil
+        previewDeadline?.cancel()
+        previewDeadline = nil
+        commitWhenReady = false
         if visible { panel.hide() }
         visible = false
         opening = false
@@ -338,6 +381,7 @@ final class SwitcherController {
 
     private func axWindow(matching target: SwitchWindow) -> AXUIElement? {
         let appElement = AXUIElementCreateApplication(target.pid)
+        AXUIElementSetMessagingTimeout(appElement, 0.15)
         var value: CFTypeRef?
         guard
             AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &value) == .success,

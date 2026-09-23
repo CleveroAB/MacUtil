@@ -15,6 +15,7 @@ enum LogitechGestureAction: String, CaseIterable {
 }
 
 enum LogitechSideButton: String, CaseIterable {
+    var controlID: UInt16 { self == .back ? 0x0053 : 0x0056 }
     case back
     case forward
 
@@ -36,16 +37,7 @@ enum LogitechSideButton: String, CaseIterable {
         }
     }
 
-    init?(mouseButtonNumber: Int) {
-        switch mouseButtonNumber {
-        case 3:
-            self = .back
-        case 4:
-            self = .forward
-        default:
-            return nil
-        }
-    }
+
 }
 
 enum LogitechSideButtonAction: String, CaseIterable {
@@ -67,7 +59,7 @@ enum LogitechSideButtonAction: String, CaseIterable {
 
 enum LogitechDeviceRoute: Hashable {
     case bolt(receiverID: String, slot: UInt8)
-    case direct(vendorID: UInt16, productID: UInt16)
+    case direct(deviceID: String)
 
     var deviceIndex: UInt8 {
         switch self {
@@ -82,8 +74,8 @@ enum LogitechDeviceRoute: Hashable {
         switch self {
         case .bolt(let receiverID, let slot):
             return "bolt:\(receiverID):\(slot)"
-        case .direct(let vendorID, let productID):
-            return String(format: "direct:%04x:%04x", vendorID, productID)
+        case .direct(let deviceID):
+            return "direct:\(deviceID)"
         }
     }
 }
@@ -108,6 +100,7 @@ struct LogitechDeviceSnapshot: Equatable {
     var route: LogitechDeviceRoute
     var batteryPercentage: Int?
     var dpi: LogitechDPIInfo?
+    var supportedSideButtons: Set<LogitechSideButton> = []
     var supportsGestureButton: Bool
     var isOnline: Bool
     var lastError: String?

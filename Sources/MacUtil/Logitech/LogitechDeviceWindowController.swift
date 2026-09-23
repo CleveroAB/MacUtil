@@ -277,9 +277,9 @@ final class LogitechDeviceWindowController: NSWindowController {
         if let item = gesturePopup.itemArray.first(where: { ($0.representedObject as? String) == action.rawValue }) {
             gesturePopup.select(item)
         }
-        gestureStatusLabel.stringValue = device.supportsGestureButton
+        gestureStatusLabel.stringValue = device.lastError ?? (device.supportsGestureButton
             ? "Current action: \(action.title)"
-            : "Gesture button is not available for this device."
+            : "Gesture button is not available for this device.")
     }
 
     private func renderSideButtons() {
@@ -288,7 +288,11 @@ final class LogitechDeviceWindowController: NSWindowController {
 
         let backAction = manager.sideButtonAction(for: deviceID, button: .back)
         let forwardAction = manager.sideButtonAction(for: deviceID, button: .forward)
-        sideButtonStatusLabel.stringValue = "Current mapping: \(backAction.title), \(forwardAction.title)"
+        backSideButtonPopup.isEnabled = device.isOnline && device.supportedSideButtons.contains(.back)
+        forwardSideButtonPopup.isEnabled = device.isOnline && device.supportedSideButtons.contains(.forward)
+        sideButtonStatusLabel.stringValue = device.lastError ?? (device.supportedSideButtons.isEmpty
+            ? "This device does not expose individual side-button controls; native buttons are unchanged."
+            : "This device only: \(backAction.title), \(forwardAction.title)")
     }
 
     @objc private func dpiSliderChanged() {

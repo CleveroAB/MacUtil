@@ -8,46 +8,68 @@ import CoreGraphics
 final class WindowlessAppQuitter {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private(set) var isActive = false
+    var isActive: Bool {
+        guard Permissions.hasAccessibility, let eventTap else { return false }
+        return CGEvent.tapIsEnabled(tap: eventTap)
+    }
+    private var isChecking = false
+    private var generation = 0
+    private let queue = DispatchQueue(label: "MacUtil.WindowlessInspection", qos: .userInitiated)
 
     func start() {
         guard !isActive else { return }
-        isActive = true
+        removeEventTap()
+        guard Permissions.hasAccessibility else { return }
         installEventTap()
+
     }
 
     func stop() {
-        guard isActive else { return }
-        isActive = false
+        generation &+= 1
         removeEventTap()
     }
 
     func quitWindowlessApps() {
+        guard !isChecking, Permissions.hasAccessibility else { return }
+        isChecking = true
+        let token = generation
         let currentPID = ProcessInfo.processInfo.processIdentifier
-        let visibleWindows = WindowEnumerator.list()
-        let appsWithWindows = Set(visibleWindows.map(\.pid))
-        let apps = NSWorkspace.shared.runningApplications.filter { app in
-            app.activationPolicy == .regular &&
-            app.processIdentifier != currentPID &&
-            app.bundleIdentifier != "com.apple.finder" &&
-            app.bundleIdentifier != nil
+        let apps = NSWorkspace.shared.runningApplications.filter {
+            $0.activationPolicy == .regular && $0.processIdentifier != currentPID &&
+            $0.bundleIdentifier != "com.apple.finder" && $0.bundleIdentifier != nil
         }
-
-        var quitNames: [String] = []
-        var failedNames: [String] = []
-        var candidateNames: [String] = []
-        for app in apps where !appsWithWindows.contains(app.processIdentifier) {
-            let name = app.localizedName ?? app.bundleIdentifier ?? "\(app.processIdentifier)"
-            candidateNames.append(name)
-            if app.terminate() {
-                quitNames.append(name)
-            } else {
-                failedNames.append(name)
+        // AX queries must not block the global keyboard event callback.
+        queue.async { [weak self] in
+            for app in apps where !app.isTerminated {
+                guard Self.hasNoOpenWindows(pid: app.processIdentifier) else { continue }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.isActive, self.generation == token, !app.isTerminated else { return }
+                    let accepted = app.terminate()
+                    DebugLog.log("[MacUtil] windowless-quit: \(app.localizedName ?? "App") accepted=\(accepted)")
+                }
             }
+            DispatchQueue.main.async { [weak self] in self?.isChecking = false }
         }
+    }
 
-        let windowedNames = visibleWindows.map { "\($0.appName):\($0.title)" }.joined(separator: " | ")
-        DebugLog.log("[MacUtil] windowless-quit: windowed=[\(windowedNames)] candidates=[\(candidateNames.joined(separator: ", "))] quit=[\(quitNames.joined(separator: ", "))] failed=[\(failedNames.joined(separator: ", "))]")
+    /// Unknown evidence always protects the app.
+    static func canQuit(axWindowCount: Int?, hasCGWindow: Bool?) -> Bool {
+        axWindowCount == 0 && hasCGWindow == false
+    }
+
+    private static func hasNoOpenWindows(pid: pid_t) -> Bool {
+        let element = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(element, 0.15)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value) == .success,
+              let windows = value as? [AXUIElement], windows.isEmpty,
+              let allWindows = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[String: Any]]
+        else { return false }
+        // Protect windows on other Spaces and apps that under-report their AX windows.
+        return canQuit(axWindowCount: windows.count, hasCGWindow: allWindows.contains {
+            ($0[kCGWindowOwnerPID as String] as? Int) == Int(pid) &&
+            ($0[kCGWindowLayer as String] as? Int) == 0
+        })
     }
 
     // MARK: Event tap
@@ -109,7 +131,7 @@ final class WindowlessAppQuitter {
 
         guard matchesShortcut else { return Unmanaged.passUnretained(event) }
 
-        quitWindowlessApps()
+        if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 { quitWindowlessApps() }
         return nil
     }
 }

@@ -95,3 +95,11 @@ When enabled for the frontmost app and the pasteboard holds copied files that ar
 ## Settings Storage
 
 MacUtil stores feature toggles and device preferences in UserDefaults under the app bundle identifier `se.clevero.macutil`. The optional OpenRouter API key is stored in Keychain, not UserDefaults.
+
+## Screenshot Cleanup
+
+Screenshot matching hashes decoded image pixels locally; no screenshot data or
+hashes leave the Mac. A pasted screenshot is moved to Trash only when its saved
+file has native screenshot metadata and uniquely matches one recent capture.
+Missing or ambiguous matches are retained. Files are never permanently deleted
+by this cleanup path.

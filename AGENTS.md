@@ -55,6 +55,7 @@ Scripts/
   build-app.sh
   package-dmg.sh
   run.sh
+Tests/MacUtilTests/                 geometry, screenshots, cleanup, and Logitech tests
 ```
 
 ## Engineering Notes
@@ -82,3 +83,6 @@ Scripts/
 3. Tell the user the app was rebuilt and relaunched.
 4. Confirm GitHub-facing docs are current for the change, especially `README.md`.
 5. If the change affects permissions, shortcuts, snapping, screenshots, the switcher, login item behavior, or status-bar UI, describe the specific manual behavior the user should test.
+6. Run `swift test` for geometry, screenshot matching, cleanup, or Logitech changes. Test notification dismissal,
+   edge/corner resizing, ordinary window moves, content drags, drag-away restore,
+   and multiple displays manually; see `CONTRIBUTING.md`.

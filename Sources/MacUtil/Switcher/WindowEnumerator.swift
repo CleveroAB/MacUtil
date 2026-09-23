@@ -27,13 +27,8 @@ enum WindowEnumerator {
         }
 
         let selfPID = ProcessInfo.processInfo.processIdentifier
-        // When Screen Recording is granted, CGWindow titles are readable; an empty
-        // title then means a phantom/utility window with nothing to show (e.g. an
-        // app running with no open document) — so we can safely drop those.
-        let titlesReadable = CGPreflightScreenCaptureAccess()
         var iconCache: [pid_t: NSImage?] = [:]
         var windows: [SwitchWindow] = []
-        var dropped: [String] = []
 
         for info in raw {
             guard
@@ -43,7 +38,8 @@ enum WindowEnumerator {
             else { continue }
 
             let pid = pid_t(pidValue)
-            if pid == selfPID { continue }
+            guard pid != selfPID,
+                  NSRunningApplication(processIdentifier: pid)?.activationPolicy == .regular else { continue }
 
             if let alpha = info[kCGWindowAlpha as String] as? Double, alpha <= 0.01 { continue }
 
@@ -55,11 +51,6 @@ enum WindowEnumerator {
 
             let appName = info[kCGWindowOwnerName as String] as? String ?? ""
             let rawTitle = info[kCGWindowName as String] as? String ?? ""
-
-            if titlesReadable && rawTitle.isEmpty {
-                dropped.append("\(appName)[\(Int(bounds.width))x\(Int(bounds.height))]")
-                continue
-            }
 
             let title = rawTitle.isEmpty ? appName : rawTitle
             let icon: NSImage?
@@ -84,16 +75,14 @@ enum WindowEnumerator {
             )
         }
 
-        let visibleIDs = Set(windows.map(\.id))
-        let minimized = minimizedWindows(
-            excluding: visibleIDs,
-            selfPID: selfPID,
-            iconCache: &iconCache
-        )
-        windows.append(contentsOf: minimized)
-
-        DebugLog.log("[MacUtil] enumerate: kept=\(windows.count) minimized=\(minimized.count) titlesReadable=\(titlesReadable) dropped=[\(dropped.joined(separator: ", "))] list=[\(windows.map { "\($0.appName):\($0.title)\($0.isMinimized ? " [min]" : "")" }.joined(separator: " | "))]")
         return windows
+    }
+
+    /// Called off the main thread. A bounded AX pass must not delay Cmd-Tab.
+    static func minimizedWindows(excluding ids: Set<CGWindowID>) -> [SwitchWindow] {
+        var cache: [pid_t: NSImage?] = [:]
+        return minimizedWindows(excluding: ids, selfPID: ProcessInfo.processInfo.processIdentifier,
+                                iconCache: &cache)
     }
 
     private static func minimizedWindows(
@@ -103,12 +92,15 @@ enum WindowEnumerator {
     ) -> [SwitchWindow] {
         var windows: [SwitchWindow] = []
         var seenIDs = existingIDs
+        let deadline = ProcessInfo.processInfo.systemUptime + 1.0
 
         for app in NSWorkspace.shared.runningApplications {
+            guard !Task.isCancelled, ProcessInfo.processInfo.systemUptime < deadline else { break }
             let pid = app.processIdentifier
             guard pid != selfPID, app.activationPolicy == .regular else { continue }
 
             let appElement = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(appElement, 0.1)
             var value: CFTypeRef?
             guard
                 AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &value) == .success,
@@ -116,6 +108,8 @@ enum WindowEnumerator {
             else { continue }
 
             for axWindow in axWindows {
+                guard !Task.isCancelled, ProcessInfo.processInfo.systemUptime < deadline else { break }
+                AXUIElementSetMessagingTimeout(axWindow, 0.1)
                 guard isMinimized(axWindow), isUserWindow(axWindow) else { continue }
 
                 var windowID: CGWindowID = 0

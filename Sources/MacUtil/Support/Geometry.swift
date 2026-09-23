@@ -12,6 +12,20 @@ import AppKit
 /// whose lower-left corner is the global origin).
 enum Geometry {
 
+    /// Fit both size and origin, including displays left/below the primary one.
+    static func constrained(_ rect: NSRect, to bounds: NSRect) -> NSRect {
+        let width = min(max(1, rect.width), bounds.width)
+        let height = min(max(1, rect.height), bounds.height)
+        return NSRect(x: min(max(rect.minX, bounds.minX), bounds.maxX - width),
+                      y: min(max(rect.minY, bounds.minY), bounds.maxY - height),
+                      width: width, height: height)
+    }
+
+    static func approximatelyEqual(_ lhs: NSRect, _ rhs: NSRect) -> Bool {
+        abs(lhs.minX - rhs.minX) <= 2 && abs(lhs.minY - rhs.minY) <= 2 &&
+        abs(lhs.width - rhs.width) <= 2 && abs(lhs.height - rhs.height) <= 2
+    }
+
     /// Height of the primary (menu-bar) screen, used as the flip pivot.
     private static var primaryHeight: CGFloat {
         NSScreen.screens.first?.frame.height ?? 0

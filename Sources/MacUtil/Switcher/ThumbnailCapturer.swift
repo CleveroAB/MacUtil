@@ -29,7 +29,7 @@ enum ThumbnailCapturer {
     /// Recording (the first call registers the app + shows the one-time prompt).
     static func refresh() {
         Task {
-            guard let content = await shareableContent() else { return }
+            guard let content = await shareableContent(), !Task.isCancelled else { return }
             await MainActor.run {
                 cache = Dictionary(
                     content.windows.map { ($0.windowID, $0) },
@@ -49,7 +49,7 @@ enum ThumbnailCapturer {
 
     /// Fallback: enumerate live (cache miss / new window), capture, refresh cache.
     static func captureLive(ids: [CGWindowID]) async -> [CGWindowID: NSImage] {
-        guard let content = await shareableContent() else { return [:] }
+        guard !Task.isCancelled, let content = await shareableContent(), !Task.isCancelled else { return [:] }
         await MainActor.run {
             cache = Dictionary(
                 content.windows.map { ($0.windowID, $0) },
@@ -63,6 +63,7 @@ enum ThumbnailCapturer {
     // MARK: Private
 
     private static func shareableContent() async -> SCShareableContent? {
+        guard !Task.isCancelled, CGPreflightScreenCaptureAccess() else { return nil }
         do {
             return try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         } catch {
@@ -75,11 +76,17 @@ enum ThumbnailCapturer {
         guard !targets.isEmpty else { return [:] }
         var images: [CGWindowID: NSImage] = [:]
         await withTaskGroup(of: (CGWindowID, NSImage?).self) { group in
-            for window in targets {
+            var remaining = targets.makeIterator()
+            for _ in 0..<min(4, targets.count) {
+                guard !Task.isCancelled, let window = remaining.next() else { break }
                 group.addTask { (window.windowID, await captureOne(window)) }
             }
             for await (id, image) in group {
+                guard !Task.isCancelled else { group.cancelAll(); break }
                 if let image { images[id] = image }
+                if let window = remaining.next() {
+                    group.addTask { (window.windowID, await captureOne(window)) }
+                }
             }
         }
         DebugLog.log("[MacUtil] thumbnails: captured \(images.count)/\(targets.count)")
@@ -87,6 +94,7 @@ enum ThumbnailCapturer {
     }
 
     private static func captureOne(_ window: SCWindow) async -> NSImage? {
+        guard !Task.isCancelled else { return nil }
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()
         let width = max(window.frame.width, 1)

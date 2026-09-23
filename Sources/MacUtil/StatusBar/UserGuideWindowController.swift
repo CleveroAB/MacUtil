@@ -90,6 +90,10 @@ final class UserGuideWindowController: NSWindowController {
             GuideRow("Drag to left or right screen edge", .note("Snap to half")),
             GuideRow("Drag to top screen edge", .note("Maximize")),
             GuideRow("Drag to screen corner", .note("Snap to quarter")),
+            GuideRow("Move a window", .note("Only moving app windows triggers snapping")),
+            GuideRow("Resize at an edge or corner", .note("Keep resizing; no snap")),
+            GuideRow("Notifications and content drags", .note("Ignored by drag snapping")),
+            GuideRow("Drag a snapped window away", .note("Restore its previous size")),
         ]))
 
         stack.addArrangedSubview(section("Window Switcher", rows: [
@@ -125,11 +129,24 @@ final class UserGuideWindowController: NSWindowController {
         ]))
 
         stack.addArrangedSubview(section("App Cleanup", rows: [
-            GuideRow("Quits unused apps", .keys([["⌘", "⇧", "Q"]])),
+            GuideRow("Quit apps with no open windows", .keys([["⌘", "⇧", "Q"]])),
+            GuideRow("Hidden / minimized / other Spaces", .note("Windows keep their apps running")),
         ]))
 
         stack.addArrangedSubview(section("Screenshots", rows: [
             GuideRow("Native macOS screenshots", .note("Saved normally and copied to clipboard")),
+            GuideRow("Pasted before saving", .note("Unique exact matches move to Trash; uncertain matches stay")),
+        ]))
+
+        stack.addArrangedSubview(section("Feature Status", rows: [
+            GuideRow("Unavailable feature", .note("Read Feature Status, then open the indicated permission")),
+            GuideRow("After granting access", .note("Return to an app or reopen this menu to retry")),
+            GuideRow("Window placement fails", .note("A beep signals failure; details appear in Feature Status")),
+        ]))
+
+        stack.addArrangedSubview(section("Logitech Devices", rows: [
+            GuideRow("Button settings", .note("Apply only to the selected device's supported controls")),
+            GuideRow("Battery / receiver pairing", .note("Open the menu or use Refresh to update")),
         ]))
 
         stack.addArrangedSubview(section("Updates", rows: [

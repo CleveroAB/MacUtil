@@ -22,19 +22,19 @@ package dependencies.
 
 - Rectangle-style window snapping with keyboard shortcuts and drag-to-edge
   previews.
-- Cmd-Tab window switcher with live ScreenCaptureKit thumbnails, app icons, close
+- Cmd-Tab window switcher with on-demand ScreenCaptureKit thumbnails, app icons, close
   and quit commands.
 - Voice-to-text dictation into the focused app.
 - Optional AI email reply mode using OpenRouter and the user's own API key.
 - Logitech HID++ helper UI for supported devices, including DPI controls,
   gesture-button Mission Control, and side-button actions.
-- Command-Shift-Q helper that quits regular apps without visible windows.
+- Command-Shift-Q helper that quits regular apps only after confirming they have no open windows.
 - Copies native macOS screenshots to the clipboard immediately while keeping the
   normal floating thumbnail and Desktop/configured-folder save behavior.
 - Optional system-wide sleep prevention keeps remote sessions and running agents
   alive when a MacBook lid is closed.
 - Manual update checks plus opt-in automatic daily checks via GitHub Releases.
-- Launch-at-login toggle and live permission status in the menu-bar app.
+- Launch-at-login toggle, live permission status, and a Feature Status menu for unavailable features.
 
 ## Requirements
 
@@ -55,8 +55,8 @@ package is intentionally simple enough to open directly in Xcode via
 Most users do not need Xcode or Swift. Download the pre-built app from
 [GitHub Releases](https://github.com/CleveroAB/MacUtil/releases/latest):
 
-- [Download MacUtil 0.1.5 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.5/MacUtil-0.1.5.dmg)
-- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.5/MacUtil-0.1.5.dmg.sha256)
+- [Download MacUtil 0.1.6 DMG](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.6/MacUtil-0.1.6.dmg)
+- [Download SHA-256 checksum](https://github.com/CleveroAB/MacUtil/releases/download/v0.1.6/MacUtil-0.1.6.dmg.sha256)
 
 Open the DMG and drag `MacUtil.app` to Applications. The release DMG is
 Developer ID signed, notarized, and stapled by Apple.
@@ -82,11 +82,17 @@ Permissions submenu that opens the relevant panes and shows current status.
 | Permission | Used For |
 | --- | --- |
 | Accessibility | Moving/resizing windows, focusing switcher selections, global event taps, and paste injection. |
-| Screen Recording | Live switcher thumbnails and immediate screenshot clipboard mirroring. Without it, the switcher can still show app icons and titles. |
+| Screen Recording | On-demand switcher thumbnails and immediate screenshot clipboard mirroring. Without it, the switcher can still show app icons and titles. |
 | Microphone | Voice-to-text recording. |
 | Speech Recognition | Apple speech transcription / SpeechAnalyzer. |
 | Input Monitoring | May be required by macOS for some event-tap or Logitech side-button behavior. |
 | Desktop / configured screenshot folder access | Reading newly saved screenshot files so they can be copied to the clipboard. |
+
+Feature Status distinguishes Ready, Off, and unavailable/degraded features and
+shows the latest window-placement error. Failed input hooks retry when an app
+becomes active or the MacUtil menu opens, so returning from System Settings
+rechecks availability without a polling timer. Shortcut conflicts are reported
+by action name. The Permissions menu also links to Input Monitoring.
 
 After granting Screen Recording, relaunch MacUtil with `Scripts/run.sh` so the
 permission is picked up by ScreenCaptureKit.
@@ -107,6 +113,12 @@ All snapping shortcuts are listed in the menu bar under Window Snapping. Drag a
 window to a screen edge for halves, the top edge for maximize, or corners for
 quarters.
 
+Drag snapping applies only when you move a standard, resizable app window.
+Resizing a window at an edge or corner never triggers a MacUtil snap preview or
+snap. Notification interactions, desktop drags, and dragging content inside a
+stationary window are ignored. Dragging a snapped window away restores its
+previous size under the pointer.
+
 ### Switcher
 
 | Action | Shortcut |
@@ -122,7 +134,11 @@ quarters.
 | Cancel | Esc |
 
 MacUtil intercepts Cmd-Tab with a session event tap. Disable Window Switcher in
-the menu to restore the default macOS app switcher.
+the menu to restore the default macOS app switcher. Untitled windows use their
+app name. The visible window list waits at most 150 ms for previews before
+showing icons; minimized windows are inspected separately with bounded
+Accessibility calls, and may appear shortly afterward. Closing the switcher
+cancels obsolete capture work; at most four thumbnail requests run concurrently.
 
 ### Voice
 
@@ -175,10 +191,34 @@ sudo pmset -a disablesleep 0
 
 When "Copy Screenshots to Clipboard" is enabled, MacUtil mirrors the native
 macOS screenshot shortcuts to the clipboard while leaving the normal floating
-thumbnail behavior untouched. If the mirrored screenshot is pasted before the
-native floating thumbnail saves to disk, MacUtil deletes the matching saved file
-as soon as it appears. The file watcher remains as a fallback for screenshot
+thumbnail behavior untouched. If the screenshot is pasted before the thumbnail
+saves, the matching saved file can be moved to **Trash**, where it is recoverable.
+Cleanup requires identical decoded image pixels, native screenshot metadata,
+and a unique capture within 30 seconds. Each capture matches at most one file.
+Missing evidence, ambiguous matches, edited screenshots, and changed screen
+content leave the saved file in place. The file watcher still copies screenshot
 flows that are not started from the standard keyboard shortcuts.
+
+### App Cleanup
+
+⌘⇧Q requests a normal quit only when both Accessibility and the complete
+CoreGraphics window list confirm an app has no windows. Hidden, minimized,
+untitled, and other-Space windows protect their app. Inspection failures also
+protect the app. Finder and MacUtil are excluded; apps are never force-quit.
+
+### Logitech Devices
+
+Supported HID++ devices expose DPI, battery information, and individual controls
+in the menu. Gesture and side-button actions use reports from the selected
+physical device and receiver slot. Unsupported side buttons retain their native
+behavior and their configuration controls are disabled. Other mice are not
+remapped. Accessibility is required for MacUtil's synthesized button actions.
+
+Device discovery responds to USB/Bluetooth arrival/removal and system wake,
+without periodic scanning. Opening the menu or using Refresh updates battery,
+DPI, and receiver pairing/online status. Devices without a hardware serial use
+their current registry identity; their preferences may need reselecting after
+reconnection. Existing device preferences are not migrated to the new identities.
 
 ### Updates
 

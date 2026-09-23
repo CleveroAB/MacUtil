@@ -2,8 +2,8 @@ import AppKit
 
 /// Windows-style "drag a window to a screen edge to snap it".
 ///
-/// Uses a single global `NSEvent` monitor for left-button drags. The callback
-/// fires *only* while the mouse button is down and moving, so idle cost is zero.
+/// Uses a single global `NSEvent` monitor for left-button gestures, with no polling.
+/// Only a real move of the standard window hit on mouse-down can snap.
 /// When the cursor pins against a screen edge/corner, a translucent preview shows
 /// where the window will land; releasing there applies the snap.
 final class DragSnapMonitor {
@@ -11,7 +11,7 @@ final class DragSnapMonitor {
     private let overlay = SnapPreviewOverlay()
     private var pending: (action: SnapAction, frame: NSRect)?
     private var dragSession: DragSession?
-    private(set) var isActive = false
+    var isActive: Bool { monitor != nil && Permissions.hasAccessibility }
 
     /// How close (pt) the cursor must be to a screen edge to engage.
     private let edgeBand: CGFloat = 5
@@ -19,22 +19,19 @@ final class DragSnapMonitor {
     private let cornerBand: CGFloat = 120
     /// Manual movement needed before a snapped window is considered dragged away.
     private let restoreDragThreshold: CGFloat = 10
-    /// Moving a window keeps its size stable; resizing should not trigger restore.
-    private let restoreSizeTolerance: CGFloat = 2
 
     func start() {
         guard !isActive else { return }
-        isActive = true
+        stop()
+        guard Permissions.hasAccessibility else { return }
         monitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDragged, .leftMouseUp]
+            matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
         ) { [weak self] event in
             self?.handle(event)
         }
     }
 
     func stop() {
-        guard isActive else { return }
-        isActive = false
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
         pending = nil
@@ -45,11 +42,27 @@ final class DragSnapMonitor {
     // MARK: Event handling
 
     private func handle(_ event: NSEvent) {
-        switch event.type {
-        case .leftMouseDragged:
-            restoreDraggedSnapIfNeeded()
+        let location = event.cgEvent.map {
+            Geometry.axToCocoa(CGRect(origin: $0.location, size: .zero)).origin
+        } ?? NSEvent.mouseLocation
 
-            if let snap = snap(at: NSEvent.mouseLocation) {
+        switch event.type {
+        case .leftMouseDown:
+            resetGesture()
+            let manager = WindowManager.shared
+            if let window = manager.snappableWindow(at: location),
+               let frame = manager.cocoaFrame(of: window) {
+                dragSession = DragSession(window: window, motion: WindowDragMotion(frameAtStart: frame))
+            }
+
+        case .leftMouseDragged:
+            guard updateDragSession(keeping: location) else {
+                pending = nil
+                overlay.hide()
+                return
+            }
+
+            if let snap = snap(at: location) {
                 pending = snap
                 overlay.show(frame: snap.frame)
             } else {
@@ -58,16 +71,27 @@ final class DragSnapMonitor {
             }
 
         case .leftMouseUp:
-            if let snap = pending {
-                apply(snap.frame)
+            // Recheck geometry and the release point: a final resize or a move
+            // away from the edge must not commit an earlier preview.
+            if pending != nil,
+               let session = dragSession,
+               let current = WindowManager.shared.cocoaFrame(of: session.window) {
+                var motion = session.motion
+                if motion.observe(current), let snap = snap(at: location) {
+                    apply(snap.frame, to: session.window, current: current)
+                }
             }
-            pending = nil
-            dragSession = nil
-            overlay.hide()
+            resetGesture()
 
         default:
             break
         }
+    }
+
+    private func resetGesture() {
+        pending = nil
+        dragSession = nil
+        overlay.hide()
     }
 
     /// Determines the snap target for a cursor location, if it is in an edge zone.
@@ -101,56 +125,72 @@ final class DragSnapMonitor {
         return (action, frame)
     }
 
-    private func apply(_ frame: NSRect) {
+    private func apply(_ frame: NSRect, to window: AXUIElement, current: NSRect) {
         let manager = WindowManager.shared
-        guard
-            let window = manager.focusedWindow(),
-            let current = manager.cocoaFrame(of: window)
-        else { return }
         manager.rememberIfNeeded(window, cocoaFrame: current)
-        manager.setCocoaFrame(frame, of: window)
+        if !manager.setCocoaFrame(frame, of: window) { NSSound.beep() }
     }
 
-    private func restoreDraggedSnapIfNeeded() {
+    private func updateDragSession(keeping location: NSPoint) -> Bool {
         let manager = WindowManager.shared
         guard
-            let window = manager.focusedWindow(),
-            manager.hasRestoreFrame(for: window),
-            let current = manager.cocoaFrame(of: window)
+            var session = dragSession,
+            let current = manager.cocoaFrame(of: session.window)
         else {
             dragSession = nil
-            return
+            return false
         }
 
-        if let session = dragSession, CFEqual(session.window, window) {
-            guard !session.restored else { return }
-
-            let moved = hypot(
-                current.origin.x - session.frameAtStart.origin.x,
-                current.origin.y - session.frameAtStart.origin.y
-            )
-            let sizeChanged =
-                abs(current.width - session.frameAtStart.width) > restoreSizeTolerance ||
-                abs(current.height - session.frameAtStart.height) > restoreSizeTolerance
-
-            if moved >= restoreDragThreshold && !sizeChanged {
-                manager.restoreSize(
-                    window,
-                    keeping: NSEvent.mouseLocation,
-                    relativeTo: current
-                )
-                dragSession = DragSession(window: window, frameAtStart: current, restored: true)
+        let isMoving = session.motion.observe(current)
+        if isMoving,
+           session.motion.distanceMoved(current) >= restoreDragThreshold,
+           manager.hasRestoreFrame(for: session.window) {
+            guard manager.restoreSize(session.window, keeping: location, relativeTo: current),
+                  let restored = manager.cocoaFrame(of: session.window) else {
+                dragSession = nil
+                return false
             }
-        } else {
-            dragSession = DragSession(window: window, frameAtStart: current, restored: false)
+            // Our own drag-away restore is not a user resize.
+            session.motion.acceptRestoredFrame(restored)
         }
+        dragSession = session
+        return isMoving
     }
 }
 
 private struct DragSession {
     let window: AXUIElement
-    let frameAtStart: NSRect
-    let restored: Bool
+    var motion: WindowDragMotion
+}
+
+/// Geometry evidence for one mouse-down/up gesture. Resizing disqualifies the
+/// entire gesture, even if the user returns to the original size before release.
+struct WindowDragMotion {
+    private let frameAtStart: NSRect
+    private var expectedSize: NSSize
+    private var isMoving = false
+    private var isResizing = false
+
+    init(frameAtStart: NSRect) {
+        self.frameAtStart = frameAtStart
+        expectedSize = frameAtStart.size
+    }
+
+    mutating func observe(_ frame: NSRect) -> Bool {
+        if abs(frame.width - expectedSize.width) > 1 || abs(frame.height - expectedSize.height) > 1 {
+            isResizing = true
+        }
+        if distanceMoved(frame) >= 5 { isMoving = true }
+        return isMoving && !isResizing
+    }
+
+    func distanceMoved(_ frame: NSRect) -> CGFloat {
+        hypot(frame.minX - frameAtStart.minX, frame.minY - frameAtStart.minY)
+    }
+
+    mutating func acceptRestoredFrame(_ frame: NSRect) {
+        expectedSize = frame.size
+    }
 }
 
 /// A reusable, click-through, translucent window used to preview a snap target.

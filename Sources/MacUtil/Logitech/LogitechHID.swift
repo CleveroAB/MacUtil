@@ -43,6 +43,16 @@ private struct LogitechHIDCandidate {
     let name: String
     let transport: String
 
+    var deviceID: String {
+        if let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String,
+           !serial.isEmpty {
+            return "\(vendorID):\(productID):\(serial)"
+        }
+        var entryID: UInt64 = 0
+        IORegistryEntryGetRegistryEntryID(IOHIDDeviceGetService(device), &entryID)
+        return "registry:\(entryID)"
+    }
+
     var isLongOnly: Bool {
         (usagePage == 0xff43 && usageID == 0x0202)
             || transport.localizedCaseInsensitiveContains("Bluetooth")
@@ -177,6 +187,7 @@ final class LogitechHIDChannel {
     private var nextListenerID = 1
     private var isClosed = false
 
+    var hardwareID: String { candidate.deviceID }
     var vendorID: UInt16 { candidate.vendorID }
     var productID: UInt16 { candidate.productID }
     var productName: String { candidate.name }
@@ -450,35 +461,17 @@ enum LogitechHID {
 
     static func openChannel(for route: LogitechDeviceRoute) throws -> LogitechHIDChannel {
         let available = candidates()
-        var fallbackBolt: LogitechHIDChannel?
-
         for candidate in available {
             switch route {
-            case .direct(let vendorID, let productID):
-                guard candidate.vendorID == vendorID, candidate.productID == productID else { continue }
+            case .direct(let deviceID):
+                guard candidate.deviceID == deviceID else { continue }
                 return try LogitechHIDChannel(candidate: candidate)
-
             case .bolt(let receiverID, _):
                 guard candidate.isBoltReceiver else { continue }
                 let channel = try LogitechHIDChannel(candidate: candidate)
-                if let uniqueID = try? receiverUniqueID(channel), uniqueID == receiverID {
-                    fallbackBolt?.close()
-                    return channel
-                }
-                if receiverID.hasPrefix("receiver:") {
-                    fallbackBolt?.close()
-                    return channel
-                }
-                if fallbackBolt == nil {
-                    fallbackBolt = channel
-                } else {
-                    channel.close()
-                }
+                if channel.hardwareID == receiverID { return channel }
+                channel.close()
             }
-        }
-
-        if case .bolt = route, let fallbackBolt {
-            return fallbackBolt
         }
         throw LogitechHIDError.deviceNotFound
     }
@@ -509,22 +502,37 @@ enum LogitechHID {
         )
     }
 
-    static func armGestureButton(route: LogitechDeviceRoute, channel: LogitechHIDChannel) throws -> UInt8 {
-        guard let featureIndex = try featureIndex(0x1b04, deviceIndex: route.deviceIndex, channel: channel) else {
+    /// Divert only controls advertised by this exact device. On partial failure,
+    /// restore every control already changed before closing the channel.
+    static func armControls(route: LogitechDeviceRoute, channel: LogitechHIDChannel,
+                            gesture: Bool, sideButtons: Set<LogitechSideButton>) throws -> UInt8 {
+        guard let index = try featureIndex(0x1b04, deviceIndex: route.deviceIndex, channel: channel) else {
             throw LogitechHIDError.unsupportedFeature(0x1b04)
         }
-
-        let controls = try reprogrammableControls(deviceIndex: route.deviceIndex, featureIndex: featureIndex, channel: channel)
-        guard controls.contains(where: { $0.cid == 0x00c3 && $0.supportsRawXY }) else {
-            throw LogitechHIDError.unsupportedFeature(0x1b04)
+        var armed: [UInt16] = []
+        do {
+            for cid in sideButtons.map(\.controlID).sorted() + (gesture ? [0x00c3] : []) {
+                try setCIDReporting(cid, diverted: true, rawXY: cid == 0x00c3 ? true : nil,
+                                    deviceIndex: route.deviceIndex, featureIndex: index, channel: channel)
+                armed.append(cid)
+            }
+        } catch {
+            for cid in armed {
+                try? setCIDReporting(cid, diverted: false, rawXY: cid == 0x00c3 ? false : nil,
+                                     deviceIndex: route.deviceIndex, featureIndex: index, channel: channel)
+            }
+            throw error
         }
-
-        try setCIDReporting(0x00c3, diverted: true, rawXY: true, deviceIndex: route.deviceIndex, featureIndex: featureIndex, channel: channel)
-        return featureIndex
+        return index
     }
 
-    static func disarmGestureButton(route: LogitechDeviceRoute, featureIndex: UInt8, channel: LogitechHIDChannel) {
-        try? setCIDReporting(0x00c3, diverted: false, rawXY: false, deviceIndex: route.deviceIndex, featureIndex: featureIndex, channel: channel)
+    static func disarmControls(route: LogitechDeviceRoute, featureIndex: UInt8,
+                               channel: LogitechHIDChannel, gesture: Bool,
+                               sideButtons: Set<LogitechSideButton>) {
+        for cid in sideButtons.map(\.controlID) + (gesture ? [0x00c3] : []) {
+            try? setCIDReporting(cid, diverted: false, rawXY: cid == 0x00c3 ? false : nil,
+                                 deviceIndex: route.deviceIndex, featureIndex: featureIndex, channel: channel)
+        }
     }
 
     static func decodeGestureEvent(_ message: LogitechHIDMessage, deviceIndex: UInt8, featureIndex: UInt8) -> LogitechGestureRawEvent? {
@@ -555,7 +563,7 @@ enum LogitechHID {
     }
 
     private static func probeBoltReceiver(_ channel: LogitechHIDChannel) -> [LogitechDeviceSnapshot] {
-        let receiverID = (try? receiverUniqueID(channel)) ?? String(format: "receiver:%04x:%04x", channel.vendorID, channel.productID)
+        let receiverID = channel.hardwareID
         var devices: [LogitechDeviceSnapshot] = []
 
         for slot in UInt8(1)...UInt8(6) {
@@ -579,7 +587,7 @@ enum LogitechHID {
     }
 
     private static func probeDirectDevice(_ channel: LogitechHIDChannel, candidate: LogitechHIDCandidate) -> LogitechDeviceSnapshot? {
-        let route = LogitechDeviceRoute.direct(vendorID: candidate.vendorID, productID: candidate.productID)
+        let route = LogitechDeviceRoute.direct(deviceID: candidate.deviceID)
         let snapshot = probePeripheral(name: candidate.name, route: route, channel: channel, online: true)
 
         // Filter receiver secondary interfaces that answer a little HID++ but are
@@ -587,6 +595,7 @@ enum LogitechHID {
         if snapshot.batteryPercentage == nil,
            snapshot.dpi == nil,
            !snapshot.supportsGestureButton,
+           snapshot.supportedSideButtons.isEmpty,
            snapshot.lastError == nil {
             return nil
         }
@@ -616,23 +625,25 @@ enum LogitechHID {
 
         let battery = (try? readBatteryPercentage(deviceIndex: route.deviceIndex, channel: channel)).flatMap { $0 }
         let dpi = try? readDPIInfo(deviceIndex: route.deviceIndex, channel: channel)
-        let supportsGesture = (try? gestureButtonIsSupported(deviceIndex: route.deviceIndex, channel: channel)) ?? false
+        let controls: [LogitechControlInfo]
+        if let index = try? featureIndex(0x1b04, deviceIndex: route.deviceIndex, channel: channel) {
+            controls = (try? reprogrammableControls(deviceIndex: route.deviceIndex, featureIndex: index, channel: channel)) ?? []
+        } else { controls = [] }
+        let supportsGesture = controls.contains { $0.cid == 0x00c3 && $0.supportsRawXY && $0.isDivertable }
+        let sideButtons = Set(LogitechSideButton.allCases.filter { button in
+            controls.contains { $0.cid == button.controlID && $0.isDivertable }
+        })
 
         return LogitechDeviceSnapshot(
             name: name,
             route: route,
             batteryPercentage: battery,
             dpi: dpi,
+            supportedSideButtons: sideButtons,
             supportsGestureButton: supportsGesture,
             isOnline: online,
             lastError: nil
         )
-    }
-
-    private static func receiverUniqueID(_ channel: LogitechHIDChannel) throws -> String {
-        let raw = try channel.readLongRegister(deviceIndex: 0xff, address: 0xfb, params: [0, 0, 0])
-        return String(decoding: raw, as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines.union(.init(charactersIn: "\0")))
     }
 
     private static func boltDeviceName(_ channel: LogitechHIDChannel, slot: UInt8) throws -> String {
@@ -676,14 +687,6 @@ enum LogitechHID {
         return payload[0] == 0 ? nil : payload[0]
     }
 
-    private static func gestureButtonIsSupported(deviceIndex: UInt8, channel: LogitechHIDChannel) throws -> Bool {
-        guard let index = try featureIndex(0x1b04, deviceIndex: deviceIndex, channel: channel) else {
-            return false
-        }
-        return try reprogrammableControls(deviceIndex: deviceIndex, featureIndex: index, channel: channel)
-            .contains { $0.cid == 0x00c3 && $0.supportsRawXY }
-    }
-
     private static func reprogrammableControls(
         deviceIndex: UInt8,
         featureIndex: UInt8,
@@ -721,7 +724,7 @@ enum LogitechHID {
     private static func setCIDReporting(
         _ cid: UInt16,
         diverted: Bool,
-        rawXY: Bool,
+        rawXY: Bool?,
         deviceIndex: UInt8,
         featureIndex: UInt8,
         channel: LogitechHIDChannel
@@ -740,7 +743,7 @@ enum LogitechHID {
         )
     }
 
-    private static func reportingBitfield(diverted: Bool, rawXY: Bool) -> UInt8 {
+    static func reportingBitfield(diverted: Bool, rawXY: Bool?) -> UInt8 {
         let divertedFlag: UInt8 = 0x01
         let rawXYFlag: UInt8 = 0x10
         var field: UInt8 = 0
@@ -748,8 +751,10 @@ enum LogitechHID {
         if diverted { field |= divertedFlag }
         field |= divertedFlag << 1
 
-        if rawXY { field |= rawXYFlag }
-        field |= rawXYFlag << 1
+        if let rawXY {
+            if rawXY { field |= rawXYFlag }
+            field |= rawXYFlag << 1
+        }
 
         return field
     }
@@ -881,6 +886,8 @@ enum LogitechHID {
 private struct LogitechControlInfo {
     let cid: UInt16
     let flags: UInt16
+
+    var isDivertable: Bool { flags & 0x0020 != 0 }
 
     var supportsRawXY: Bool {
         flags & 0x0100 != 0

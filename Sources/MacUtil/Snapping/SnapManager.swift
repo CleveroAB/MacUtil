@@ -5,25 +5,32 @@ import AppKit
 final class SnapManager {
     private var hotKeyIDs: [UInt32] = []
     private(set) var isActive = false
+    private(set) var registrationError: String?
 
     func start() {
         guard !isActive else { return }
-        isActive = true
+        stop()
+        guard Permissions.hasAccessibility else { return }
+        var failed: [String] = []
         for shortcut in SnapShortcuts.all {
             let combo = KeyCombo(keyCode: shortcut.keyCode, modifiers: shortcut.carbonModifiers)
             if let id = HotKeyCenter.shared.register(combo, handler: { [weak self] in
                 self?.apply(shortcut.action)
             }) {
                 hotKeyIDs.append(id)
+            } else {
+                failed.append(shortcut.name)
             }
         }
+        isActive = failed.isEmpty
+        registrationError = failed.isEmpty ? nil : "Shortcut unavailable: " + failed.joined(separator: ", ")
     }
 
     func stop() {
-        guard isActive else { return }
         isActive = false
         hotKeyIDs.forEach { HotKeyCenter.shared.unregister($0) }
         hotKeyIDs.removeAll()
+        registrationError = nil
     }
 
     /// Applies a snap action to the frontmost window. Public so drag-to-edge can
@@ -54,7 +61,7 @@ final class SnapManager {
                 visibleFrame: screen.visibleFrame, current: currentFrame
             ) else { return }
             manager.rememberIfNeeded(window, cocoaFrame: currentFrame)
-            manager.setCocoaFrame(target, of: window)
+            if !manager.setCocoaFrame(target, of: window) { NSSound.beep() }
         }
     }
 
@@ -78,14 +85,14 @@ final class SnapManager {
         let relX = cvf.width > 0 ? (currentFrame.minX - cvf.minX) / cvf.width : 0
         let relY = cvf.height > 0 ? (currentFrame.minY - cvf.minY) / cvf.height : 0
 
-        let newFrame = NSRect(
+        let newFrame = Geometry.constrained(NSRect(
             x: tvf.minX + relX * tvf.width,
             y: tvf.minY + relY * tvf.height,
             width: min(currentFrame.width, tvf.width),
             height: min(currentFrame.height, tvf.height)
-        )
+        ), to: tvf)
 
         WindowManager.shared.rememberIfNeeded(window, cocoaFrame: currentFrame)
-        WindowManager.shared.setCocoaFrame(newFrame, of: window)
+        if !WindowManager.shared.setCocoaFrame(newFrame, of: window) { NSSound.beep() }
     }
 }

@@ -7,38 +7,56 @@ final class LogitechManager {
     private let devicesLock = NSLock()
 
     private var devices: [LogitechDeviceSnapshot] = []
-    private var timer: DispatchSourceTimer?
+    private let deviceMonitor = LogitechDeviceMonitor()
+    private var discoveryRefresh: DispatchWorkItem?
+    private var wakeObserver: NSObjectProtocol?
+    private var isRunning = false
+    private var lastAccessibility = false
+    private(set) var discoveryIssue: String?
     private var captureSessions: [String: LogitechGestureCaptureSession] = [:]
-    private let sideButtonTap = LogitechSideButtonEventTap()
     private var isRefreshing = false
 
     var onDevicesChanged: (() -> Void)?
 
     func start() {
-        sideButtonTap.actionProvider = { [weak self] button in
-            self?.sideButtonActionForTap(button)
-        }
+        lastAccessibility = Permissions.hasAccessibility
+        queue.sync { isRunning = true }
+        deviceMonitor.onChange = { [weak self] in self?.scheduleDiscoveryRefresh() }
+        discoveryIssue = deviceMonitor.start() ? nil : "Device access unavailable; check Input Monitoring"
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.scheduleDiscoveryRefresh() }
         refreshDevices()
+    }
 
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + 10, repeating: 30)
-        timer.setEventHandler { [weak self] in
-            self?.refreshDevicesOnQueue()
+    func refreshPermissionState() {
+        let granted = Permissions.hasAccessibility
+        if discoveryIssue != nil {
+            discoveryIssue = deviceMonitor.start() ? nil : "Device access unavailable; check Input Monitoring"
         }
-        timer.resume()
-        self.timer = timer
+        guard granted != lastAccessibility else { return }
+        lastAccessibility = granted
+        refreshDevices()
+    }
+
+    private func scheduleDiscoveryRefresh() {
+        discoveryRefresh?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.refreshDevices() }
+        discoveryRefresh = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 
     func stop() {
-        timer?.cancel()
-        timer = nil
+        discoveryRefresh?.cancel()
+        discoveryRefresh = nil
+        deviceMonitor.stop()
+        if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
+        wakeObserver = nil
         queue.sync {
-            for session in captureSessions.values {
-                session.stop()
-            }
+            isRunning = false
+            for session in captureSessions.values { session.stop() }
             captureSessions.removeAll()
         }
-        stopSideButtonTap()
     }
 
     func refreshDevices() {
@@ -65,7 +83,7 @@ final class LogitechManager {
         settings.setLogitechGestureAction(action, for: deviceID)
         queue.async { [weak self] in
             guard let self else { return }
-            self.reconcileCaptureSessions(with: self.currentDevices())
+            self.reconcileCurrentDevices()
         }
     }
 
@@ -75,7 +93,7 @@ final class LogitechManager {
 
     func setSideButtonAction(_ action: LogitechSideButtonAction, for deviceID: String, button: LogitechSideButton) {
         settings.setLogitechSideButtonAction(action, for: deviceID, button: button)
-        updateSideButtonTap(with: currentDevices())
+        queue.async { [weak self] in self?.reconcileCurrentDevices() }
     }
 
     func setDPI(_ dpi: Int, for deviceID: String, completion: @escaping (Result<UInt16, Error>) -> Void) {
@@ -103,17 +121,16 @@ final class LogitechManager {
     }
 
     private func refreshDevicesOnQueue() {
-        guard !isRefreshing else { return }
+        guard isRunning, !isRefreshing else { return }
         isRefreshing = true
-        let latest = LogitechHID.enumerateDevices()
+        var latest = LogitechHID.enumerateDevices()
         isRefreshing = false
 
+        reconcileCaptureSessions(with: &latest)
         devicesLock.lock()
         devices = latest
         devicesLock.unlock()
 
-        reconcileCaptureSessions(with: latest)
-        updateSideButtonTap(with: latest)
         DispatchQueue.main.async { [weak self] in
             self?.onDevicesChanged?()
         }
@@ -133,100 +150,132 @@ final class LogitechManager {
         }
     }
 
-    private func reconcileCaptureSessions(with snapshots: [LogitechDeviceSnapshot]) {
-        let desired = snapshots.filter {
-            $0.isOnline
-                && $0.supportsGestureButton
-                && settings.logitechGestureAction(for: $0.id) == .missionControl
-        }
+    private func reconcileCurrentDevices() {
+        guard isRunning else { return }
+        var latest = currentDevices()
+        reconcileCaptureSessions(with: &latest)
+        devicesLock.lock()
+        devices = latest
+        devicesLock.unlock()
+        DispatchQueue.main.async { [weak self] in self?.onDevicesChanged?() }
+    }
 
-        let desiredIDs = Set(desired.map(\.id))
-        let staleIDs = captureSessions.keys.filter { !desiredIDs.contains($0) }
-        for id in staleIDs {
-            captureSessions[id]?.stop()
-            captureSessions.removeValue(forKey: id)
+    private func reconcileCaptureSessions(with snapshots: inout [LogitechDeviceSnapshot]) {
+        let onlineIDs = Set(snapshots.filter(\.isOnline).map(\.id))
+        for id in Array(captureSessions.keys) where !onlineIDs.contains(id) {
+            captureSessions.removeValue(forKey: id)?.stop()
         }
-
-        for device in desired where captureSessions[device.id] == nil {
+        for index in snapshots.indices {
+            let device = snapshots[index]
+            let config = LogitechControlConfiguration(
+                gesture: device.supportsGestureButton && settings.logitechGestureAction(for: device.id) == .missionControl,
+                sideActions: Dictionary(uniqueKeysWithValues: device.supportedSideButtons.map {
+                    ($0, settings.logitechSideButtonAction(for: device.id, button: $0))
+                })
+            )
+            let canRun = device.isOnline && Permissions.hasAccessibility && (config.gesture || !config.sideActions.isEmpty)
+            if let session = captureSessions[device.id], !canRun || session.configuration != config {
+                session.stop()
+                captureSessions[device.id] = nil
+            }
+            guard canRun else {
+                if !Permissions.hasAccessibility { snapshots[index].lastError = "Grant Accessibility to enable button actions" }
+                continue
+            }
+            guard captureSessions[device.id] == nil else { continue }
             do {
-                let session = LogitechGestureCaptureSession(route: device.route)
+                let session = LogitechGestureCaptureSession(route: device.route, configuration: config)
                 try session.start()
                 captureSessions[device.id] = session
+                snapshots[index].lastError = nil
             } catch {
-                DebugLog.log("Logitech gesture capture failed for \(device.name): \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func sideButtonActionForTap(_ button: LogitechSideButton) -> LogitechSideButtonAction? {
-        guard let deviceID = currentDevices().first(where: { $0.isOnline })?.id else {
-            return nil
-        }
-        return settings.logitechSideButtonAction(for: deviceID, button: button)
-    }
-
-    private func updateSideButtonTap(with snapshots: [LogitechDeviceSnapshot]) {
-        let shouldRun = snapshots.contains { $0.isOnline }
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            shouldRun ? self.sideButtonTap.start() : self.sideButtonTap.stop()
-        }
-    }
-
-    private func stopSideButtonTap() {
-        if Thread.isMainThread {
-            sideButtonTap.stop()
-        } else {
-            DispatchQueue.main.sync {
-                sideButtonTap.stop()
+                snapshots[index].lastError = "Button capture: \(error.localizedDescription)"
+                DebugLog.log("[MacUtil] Logitech capture failed: \(error.localizedDescription)")
             }
         }
     }
 }
 
+struct LogitechControlConfiguration: Equatable {
+    let gesture: Bool
+    let sideActions: [LogitechSideButton: LogitechSideButtonAction]
+}
+
+/// Each session receives reports from one physical channel and receiver slot.
+struct LogitechButtonPresses {
+    private var held: Set<UInt16> = []
+    mutating func update(_ controls: [UInt16]) -> Set<UInt16> {
+        let current = Set(controls.filter { $0 != 0 })
+        defer { held = current }
+        return current.subtracting(held)
+    }
+}
+
 private final class LogitechGestureCaptureSession {
     let route: LogitechDeviceRoute
+    let configuration: LogitechControlConfiguration
+    private var presses = LogitechButtonPresses()
     private(set) var channel: LogitechHIDChannel?
 
     private var listenerID: Int?
     private var featureIndex: UInt8?
     private let stateLock = NSLock()
+    private var isRunning = false
     private var gestureHeld = false
     private var heldSince: Date?
     private var dx = 0
     private var dy = 0
     private var fired = false
 
-    init(route: LogitechDeviceRoute) {
+    init(route: LogitechDeviceRoute, configuration: LogitechControlConfiguration) {
         self.route = route
+        self.configuration = configuration
     }
 
     func start() throws {
         let channel = try LogitechHID.openChannel(for: route)
-        let featureIndex = try LogitechHID.armGestureButton(route: route, channel: channel)
+        let featureIndex: UInt8
+        do {
+            featureIndex = try LogitechHID.armControls(route: route, channel: channel,
+                gesture: configuration.gesture, sideButtons: Set(configuration.sideActions.keys))
+        } catch {
+            channel.close()
+            throw error
+        }
 
+        stateLock.lock()
         self.channel = channel
         self.featureIndex = featureIndex
+        isRunning = true
+        stateLock.unlock()
         listenerID = channel.addListener { [weak self] message in
             self?.handle(message)
         }
     }
 
     func stop() {
+        stateLock.lock()
+        isRunning = false
+        stateLock.unlock()
         if let channel, let listenerID {
             channel.removeListener(listenerID)
         }
         if let channel, let featureIndex {
-            LogitechHID.disarmGestureButton(route: route, featureIndex: featureIndex, channel: channel)
+            LogitechHID.disarmControls(route: route, featureIndex: featureIndex, channel: channel,
+                gesture: configuration.gesture, sideButtons: Set(configuration.sideActions.keys))
         }
         channel?.close()
+        stateLock.lock()
         channel = nil
         listenerID = nil
         featureIndex = nil
+        stateLock.unlock()
     }
 
     private func handle(_ message: LogitechHIDMessage) {
-        guard let featureIndex,
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard isRunning, let featureIndex,
               let event = LogitechHID.decodeGestureEvent(
                 message,
                 deviceIndex: route.deviceIndex,
@@ -235,11 +284,13 @@ private final class LogitechGestureCaptureSession {
             return
         }
 
-        stateLock.lock()
-        defer { stateLock.unlock() }
-
         switch event {
         case .buttons(let cids):
+            let pressed = presses.update(cids)
+            for (button, action) in configuration.sideActions where pressed.contains(button.controlID) {
+                LogitechActionDispatcher.perform(action)
+            }
+            guard configuration.gesture else { return }
             let isHeld = cids.contains(0x00c3)
             if isHeld && !gestureHeld {
                 gestureHeld = true
@@ -332,98 +383,8 @@ private enum LogitechActionDispatcher {
                 continue
             }
             event.setIntegerValueField(.mouseEventButtonNumber, value: buttonNumber)
-            event.setIntegerValueField(.eventSourceUserData, value: LogitechSideButtonEventTap.syntheticEventMarker)
             event.post(tap: .cghidEventTap)
         }
-    }
-}
-
-private final class LogitechSideButtonEventTap {
-    static let syntheticEventMarker: Int64 = 0x4d555342
-
-    var actionProvider: ((LogitechSideButton) -> LogitechSideButtonAction?)?
-
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
-    private(set) var isActive = false
-
-    func start() {
-        guard !isActive else { return }
-        isActive = true
-        installEventTap()
-    }
-
-    func stop() {
-        guard isActive else { return }
-        isActive = false
-        removeEventTap()
-    }
-
-    private func installEventTap() {
-        let mask = (UInt64(1) << CGEventType.otherMouseDown.rawValue)
-            | (UInt64(1) << CGEventType.otherMouseUp.rawValue)
-
-        let callback: CGEventTapCallBack = { _, type, event, refcon in
-            guard let refcon else { return Unmanaged.passUnretained(event) }
-            let tap = Unmanaged<LogitechSideButtonEventTap>.fromOpaque(refcon).takeUnretainedValue()
-            return tap.handle(type: type, event: event)
-        }
-
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: CGEventMask(mask),
-            callback: callback,
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
-            isActive = false
-            DebugLog.log("[MacUtil] logitech: side-button event tap creation FAILED (grant Accessibility / Input Monitoring)")
-            return
-        }
-
-        eventTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-    }
-
-    private func removeEventTap() {
-        if let eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: false)
-        }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        runLoopSource = nil
-        eventTap = nil
-    }
-
-    private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
-            return Unmanaged.passUnretained(event)
-        }
-
-        guard type == .otherMouseDown || type == .otherMouseUp else {
-            return Unmanaged.passUnretained(event)
-        }
-
-        guard event.getIntegerValueField(.eventSourceUserData) != Self.syntheticEventMarker else {
-            return Unmanaged.passUnretained(event)
-        }
-
-        let buttonNumber = Int(event.getIntegerValueField(.mouseEventButtonNumber))
-        guard let button = LogitechSideButton(mouseButtonNumber: buttonNumber),
-              let action = actionProvider?(button) else {
-            return Unmanaged.passUnretained(event)
-        }
-
-        if type == .otherMouseDown {
-            LogitechActionDispatcher.perform(action)
-        }
-        return nil
     }
 }
 

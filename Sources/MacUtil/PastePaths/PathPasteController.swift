@@ -15,17 +15,20 @@ final class PathPasteController {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private(set) var isActive = false
+    var isActive: Bool {
+        guard Permissions.hasAccessibility, let eventTap else { return false }
+        return CGEvent.tapIsEnabled(tap: eventTap)
+    }
 
     func start() {
         guard !isActive else { return }
-        isActive = true
+        removeEventTap()
+        guard Permissions.hasAccessibility else { return }
         installEventTap()
+
     }
 
     func stop() {
-        guard isActive else { return }
-        isActive = false
         removeEventTap()
     }
 

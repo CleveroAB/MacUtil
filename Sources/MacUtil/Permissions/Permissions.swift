@@ -33,6 +33,12 @@ enum Permissions {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
     }
 
+    static var hasInputMonitoring: Bool { CGPreflightListenEventAccess() }
+
+    static func openInputMonitoringSettings() {
+        open("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+    }
+
     // MARK: Secure Event Input
 
     /// True while any process holds Secure Event Input — password fields,

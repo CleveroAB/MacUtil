@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let logitechManager = LogitechManager()
     private let voiceInput = VoiceInputController()
     private let pathPaste = PathPasteController()
+    private var activationObserver: NSObjectProtocol?
     private var statusBar: StatusBarController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -46,9 +47,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pathPaste: pathPaste
         )
         logitechManager.start()
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.statusBar?.refreshFeatureAvailability() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
+        snapManager.stop()
+        dragMonitor.stop()
+        windowlessAppQuitter.stop()
+        switcher.stop()
         updateChecker.stop()
         screenshotClipboard.stop()
         voiceInput.stop()

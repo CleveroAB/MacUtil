@@ -5,6 +5,34 @@ All notable changes to MacUtil will be documented in this file.
 The format follows the spirit of Keep a Changelog, and this project uses
 semantic versioning once public releases begin.
 
+## [0.1.6] - 2026-09-23
+
+### Added
+
+- Feature Status menu showing operational errors, shortcut conflicts, and
+  degraded features, plus an Input Monitoring permission link.
+- Regression tests for screenshot matching, app-cleanup eligibility,
+  cross-display placement, and Logitech report attribution.
+
+### Fixed
+
+- Screenshot cleanup requires a unique exact pixel match and native metadata,
+  consumes each match once, and moves files to Trash instead of deleting them.
+- App cleanup protects all open windows, including hidden, minimized, untitled,
+  and other-Space windows; uncertain inspections never trigger a quit.
+- Failed input hooks retry on app activation and menu open.
+- Logitech side buttons are handled per physical device/receiver slot, with
+  capability-aware controls and event-driven device discovery.
+- The switcher preserves untitled windows, bounds preview waiting, limits
+  concurrent captures, and moves minimized-window inspection off the input path.
+- Cross-display placement constrains the full frame; placement errors are
+  reported, failed restores retain their saved frame, and closed-window state
+  is cleaned up.
+- Drag snapping now follows the standard app window clicked at the start of a
+  gesture, ignoring notification, desktop, and stationary-window content drags.
+- Resizing a window cancels drag snapping for the entire gesture, including when
+  a resize reaches a screen edge or returns to the window's original size.
+
 ## [0.1.5] - 2026-08-10
 
 ### Added

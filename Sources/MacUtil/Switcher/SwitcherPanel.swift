@@ -3,9 +3,8 @@ import AppKit
 /// The floating overlay that shows the grid of window cards.
 ///
 /// A borderless, non-activating `NSPanel`: it appears above everything without
-/// activating MacUtil, so the previously-focused app stays frontmost. Cards are
-/// built with their thumbnails already in place (captured before show) so there
-/// is no icon→preview flicker.
+/// activating MacUtil, so the previously-focused app stays frontmost. Cards can
+/// show icons immediately while slow thumbnails are still being captured.
 final class SwitcherPanel {
     private var panel: NSPanel?
     private var cards: [SwitcherCard] = []

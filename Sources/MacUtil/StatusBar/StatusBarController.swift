@@ -16,6 +16,7 @@ final class StatusBarController: NSObject {
     private let userGuide = UserGuideWindowController()
     private let settings = Settings.shared
     private var logitechWindows: [String: LogitechDeviceWindowController] = [:]
+    private var healthMenu: NSMenu?
     private var isMenuOpen = false
     private var menuNeedsReload = false
     private var voiceAnimationTimer: Timer?
@@ -40,6 +41,7 @@ final class StatusBarController: NSObject {
     private var loginItem: NSMenuItem?
     private var automaticUpdatesItem: NSMenuItem?
     private var accessibilityItem: NSMenuItem?
+    private var inputMonitoringItem: NSMenuItem?
     private var screenRecordingItem: NSMenuItem?
     private var microphoneItem: NSMenuItem?
     private var speechRecognitionItem: NSMenuItem?
@@ -127,6 +129,11 @@ final class StatusBarController: NSObject {
         addLogitechDevices(to: menu)
 
         menu.addItem(.separator())
+        let health = NSMenuItem(title: "Feature Status", action: nil, keyEquivalent: "")
+        healthMenu = NSMenu()
+        health.submenu = healthMenu
+        menu.addItem(health)
+        updateFeatureStatus()
         let guide = NSMenuItem(title: "User Guide", action: #selector(showUserGuide), keyEquivalent: "")
         guide.target = self
         menu.addItem(guide)
@@ -138,6 +145,11 @@ final class StatusBarController: NSObject {
         accessibility.target = self
         permissionsMenu.addItem(accessibility)
         accessibilityItem = accessibility
+
+        let inputMonitoring = NSMenuItem(title: "Input Monitoring", action: #selector(openInputMonitoring), keyEquivalent: "")
+        inputMonitoring.target = self
+        permissionsMenu.addItem(inputMonitoring)
+        inputMonitoringItem = inputMonitoring
 
         let screenRecording = NSMenuItem(title: "Screen Recording", action: #selector(openScreenRecording), keyEquivalent: "")
         screenRecording.target = self
@@ -174,6 +186,52 @@ final class StatusBarController: NSObject {
         menu.addItem(quit)
 
         return menu
+    }
+
+    /// Called on app activation and menu open, with no permission polling timer.
+    func refreshFeatureAvailability() {
+        logitechManager.refreshPermissionState()
+        if settings.snappingEnabled { snapManager.start() }
+        if settings.dragSnapEnabled { dragMonitor.start() }
+        if settings.windowlessQuitterEnabled { windowlessAppQuitter.start() }
+        if settings.switcherEnabled { switcher.start() }
+        if settings.pathPasteEnabled { pathPaste.start() }
+        if settings.screenshotClipboardEnabled { screenshotClipboard.start() }
+        updateFeatureStatus()
+    }
+
+    private func updateFeatureStatus() {
+        func inputIssue(_ active: Bool) -> String? {
+            if !Permissions.hasAccessibility { return "Grant Accessibility in Permissions" }
+            return active ? nil : "Input hook unavailable; check Accessibility / Input Monitoring"
+        }
+        let rows: [(String, Bool, String?)] = [
+            ("Keyboard snapping", settings.snappingEnabled,
+             snapManager.registrationError ?? inputIssue(snapManager.isActive)),
+            ("Drag snapping", settings.dragSnapEnabled, inputIssue(dragMonitor.isActive)),
+            ("Window switcher", settings.switcherEnabled,
+             inputIssue(switcher.isActive) ?? (Permissions.hasScreenRecording ? nil : "Icons only; grant Screen Recording for previews")),
+            ("App cleanup", settings.windowlessQuitterEnabled, inputIssue(windowlessAppQuitter.isActive)),
+            ("Screenshot clipboard", settings.screenshotClipboardEnabled, screenshotClipboard.statusIssue),
+            ("Paste file paths", settings.pathPasteEnabled, inputIssue(pathPaste.isActive)),
+            ("Logitech discovery", true, logitechManager.discoveryIssue),
+            ("Voice shortcuts", settings.voiceInputEnabled, voiceInput.lastError ?? (voiceInput.isActive ? nil : "Shortcut unavailable")),
+        ]
+        healthMenu?.removeAllItems()
+        for (name, enabled, issue) in rows {
+            let description = enabled ? (issue ?? "Ready") : "Off"
+            let item = NSMenuItem(title: "\(name): \(description)", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            item.state = enabled ? (issue == nil ? .on : .mixed) : .off
+            item.toolTip = description
+            healthMenu?.addItem(item)
+        }
+        if let error = WindowManager.shared.lastError {
+            healthMenu?.addItem(.separator())
+            let item = NSMenuItem(title: "Last window placement: \(error)", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            healthMenu?.addItem(item)
+        }
     }
 
     private func reloadMenu() {
@@ -637,6 +695,8 @@ final class StatusBarController: NSObject {
         Permissions.openAccessibilitySettings()
     }
 
+    @objc private func openInputMonitoring() { Permissions.openInputMonitoringSettings() }
+
     @objc private func openScreenRecording() {
         // Trigger the prompt if it has never been asked; otherwise open Settings.
         if !Permissions.hasScreenRecording {
@@ -868,8 +928,10 @@ final class StatusBarController: NSObject {
 extension StatusBarController: NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         isMenuOpen = true
+        refreshFeatureAvailability()
         loginItem?.state = LoginItem.isEnabled ? .on : .off
         accessibilityItem?.state = Permissions.hasAccessibility ? .on : .off
+        inputMonitoringItem?.state = Permissions.hasInputMonitoring ? .on : .off
         screenRecordingItem?.state = Permissions.hasScreenRecording ? .on : .off
         microphoneItem?.state = Permissions.hasMicrophone ? .on : .off
         speechRecognitionItem?.state = Permissions.hasSpeechRecognition ? .on : .off

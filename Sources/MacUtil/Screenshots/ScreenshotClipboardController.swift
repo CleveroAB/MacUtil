@@ -31,18 +31,6 @@ final class ScreenshotClipboardController {
         let date: Date
     }
 
-    private struct ImageSignature: Equatable {
-        let width: Int
-        let height: Int
-    }
-
-    private struct ImmediateCapture {
-        let copiedAt: Date
-        let pasteboardChangeCount: Int
-        let imageSignature: ImageSignature?
-        var deleteWhenSaved = false
-    }
-
     private enum CaptureMode {
         case selection
         case window
@@ -71,18 +59,33 @@ final class ScreenshotClipboardController {
     private var processedKeys = Set<String>()
     private var retryCounts: [String: Int] = [:]
     private var interactiveCapture: InteractiveCapture?
-    private var immediateCaptures: [ImmediateCapture] = []
+    private var saveMatcher = ScreenshotSaveMatcher()
     private var startedAt = Date.distantPast
     private var watchedDirectory: URL?
     private(set) var isActive = false
 
+    var statusIssue: String? {
+        if !Permissions.hasAccessibility { return "Grant Accessibility in Permissions" }
+        if !Permissions.hasScreenRecording { return "Grant Screen Recording, then relaunch" }
+        guard let shortcutEventTap, CGEvent.tapIsEnabled(tap: shortcutEventTap) else {
+            return "Input hook unavailable; check Accessibility / Input Monitoring"
+        }
+        if directorySource == nil { return "Screenshot folder unavailable; check folder access" }
+        return nil
+    }
+
     func start() {
-        guard !isActive else { return }
+        if isActive {
+            if let shortcutEventTap, !CGEvent.tapIsEnabled(tap: shortcutEventTap) { removeShortcutEventTap() }
+            if shortcutEventTap == nil { installShortcutEventTap() }
+            if directorySource == nil { installWatcher() }
+            return
+        }
         isActive = true
         startedAt = Date()
         processedKeys.removeAll()
         retryCounts.removeAll()
-        immediateCaptures.removeAll()
+        saveMatcher = ScreenshotSaveMatcher()
         installShortcutEventTap()
         installWatcher()
     }
@@ -96,7 +99,7 @@ final class ScreenshotClipboardController {
         directorySource?.cancel()
         directorySource = nil
         interactiveCapture = nil
-        immediateCaptures.removeAll()
+        saveMatcher = ScreenshotSaveMatcher()
         watchedDirectory = nil
     }
 
@@ -362,33 +365,15 @@ final class ScreenshotClipboardController {
     }
 
     private func recordImmediateCapture() {
-        let now = Date()
+        guard isActive else { return }
         let pasteboard = NSPasteboard.general
-        immediateCaptures.append(ImmediateCapture(
-            copiedAt: now,
-            pasteboardChangeCount: pasteboard.changeCount,
-            imageSignature: Self.imageSignature(from: pasteboard)
-        ))
-        trimImmediateCaptures(now: now)
+        guard let fingerprint = Self.imageSignature(from: pasteboard) else { return }
+        saveMatcher.record(.init(copiedAt: Date(), pasteboardChangeCount: pasteboard.changeCount,
+                                 fingerprint: fingerprint))
     }
 
     private func markCurrentScreenshotForDeletionAfterPaste() {
-        let now = Date()
-        trimImmediateCaptures(now: now)
-
-        guard let index = immediateCaptures.lastIndex(where: { capture in
-            guard NSPasteboard.general.changeCount == capture.pasteboardChangeCount else { return false }
-            guard let currentSignature = Self.imageSignature(from: NSPasteboard.general),
-                  let captureSignature = capture.imageSignature else {
-                return capture.imageSignature == nil
-            }
-            return currentSignature == captureSignature
-        }) else {
-            return
-        }
-
-        immediateCaptures[index].deleteWhenSaved = true
-        DebugLog.log("[MacUtil] screenshots: pasted before native save; pending file will be deleted")
+        saveMatcher.markPasted(changeCount: NSPasteboard.general.changeCount, now: Date())
     }
 
     private static func captureRectangle(from start: CGPoint, to end: CGPoint) -> CGRect {
@@ -505,7 +490,7 @@ final class ScreenshotClipboardController {
         }
 
         trimProcessedKeysIfNeeded()
-        trimImmediateCaptures(now: now)
+        saveMatcher.expire(at: now)
     }
 
     private func candidate(for url: URL, now: Date) -> Candidate? {
@@ -532,40 +517,21 @@ final class ScreenshotClipboardController {
     }
 
     private func handleImmediateCaptureSave(_ candidate: Candidate) -> Bool {
-        guard let index = matchingImmediateCaptureIndex(for: candidate) else { return false }
-        let capture = immediateCaptures[index]
+        guard let capture = saveMatcher.consume(
+            fingerprint: Self.imageSignature(forFileAt: candidate.url), savedAt: candidate.date
+        ) else { return false }
         processedKeys.insert(candidate.key)
 
-        if capture.deleteWhenSaved {
-            deleteSavedScreenshot(candidate)
-        } else {
-            DebugLog.log("[MacUtil] screenshots: ignored native save after immediate copy: \(candidate.url.lastPathComponent)")
+        // A filename alone is insufficient evidence for removing a file.
+        if capture.wasPasted && Self.hasScreenCaptureMetadata(candidate.url) {
+            do {
+                try FileManager.default.trashItem(at: candidate.url, resultingItemURL: nil)
+                DebugLog.log("[MacUtil] screenshots: moved matching pasted screenshot to Trash")
+            } catch {
+                DebugLog.log("[MacUtil] screenshots: kept saved file; Trash failed: \(error.localizedDescription)")
+            }
         }
-
         return true
-    }
-
-    private func matchingImmediateCaptureIndex(for candidate: Candidate) -> Int? {
-        let fileSignature = Self.imageSignature(forFileAt: candidate.url)
-        return immediateCaptures.lastIndex { capture in
-            candidate.date >= capture.copiedAt.addingTimeInterval(-1)
-                && candidate.date <= capture.copiedAt.addingTimeInterval(Constants.recentFileWindow)
-                && Self.signaturesMatch(capture.imageSignature, fileSignature)
-        }
-    }
-
-    private static func signaturesMatch(_ lhs: ImageSignature?, _ rhs: ImageSignature?) -> Bool {
-        guard let lhs, let rhs else { return true }
-        return lhs == rhs
-    }
-
-    private func deleteSavedScreenshot(_ candidate: Candidate) {
-        do {
-            try FileManager.default.removeItem(at: candidate.url)
-            DebugLog.log("[MacUtil] screenshots: deleted pasted screenshot file: \(candidate.url.lastPathComponent)")
-        } catch {
-            DebugLog.log("[MacUtil] screenshots: delete failed for \(candidate.url.lastPathComponent): \(error.localizedDescription)")
-        }
     }
 
     // MARK: Pasteboard
@@ -618,7 +584,7 @@ final class ScreenshotClipboardController {
         return item.types.isEmpty ? nil : item
     }
 
-    private static func imageSignature(from pasteboard: NSPasteboard) -> ImageSignature? {
+    private static func imageSignature(from pasteboard: NSPasteboard) -> ScreenshotFingerprint? {
         for type in [PasteboardTypes.png, PasteboardTypes.tiff, PasteboardTypes.jpeg, PasteboardTypes.heic, PasteboardTypes.gif, PasteboardTypes.bmp] {
             guard let data = pasteboard.data(forType: type),
                   let signature = imageSignature(from: data) else {
@@ -629,22 +595,13 @@ final class ScreenshotClipboardController {
         return nil
     }
 
-    private static func imageSignature(forFileAt url: URL) -> ImageSignature? {
+    private static func imageSignature(forFileAt url: URL) -> ScreenshotFingerprint? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return imageSignature(from: data)
     }
 
-    private static func imageSignature(from data: Data) -> ImageSignature? {
-        if let bitmap = NSBitmapImageRep(data: data) {
-            return ImageSignature(width: bitmap.pixelsWide, height: bitmap.pixelsHigh)
-        }
-
-        guard let image = NSImage(data: data) else { return nil }
-        var rect = NSRect(origin: .zero, size: image.size)
-        guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
-            return nil
-        }
-        return ImageSignature(width: cgImage.width, height: cgImage.height)
+    private static func imageSignature(from data: Data) -> ScreenshotFingerprint? {
+        ScreenshotFingerprint(data: data)
     }
 
     private static func pasteboardType(for url: URL) -> NSPasteboard.PasteboardType? {
@@ -775,7 +732,5 @@ final class ScreenshotClipboardController {
         }
     }
 
-    private func trimImmediateCaptures(now: Date) {
-        immediateCaptures.removeAll { now.timeIntervalSince($0.copiedAt) > Constants.recentFileWindow }
-    }
+
 }
